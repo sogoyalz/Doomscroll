@@ -1,0 +1,62 @@
+/* Base */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color:#222; background:#fafafa; width:360px; padding:12px;
+}
+h1 { font-size:18px; margin:0 0 8px; }
+.h2, h2 { font-size:14px; margin:0; }
+.header { margin-bottom:6px; }
+
+.summary .stat { margin:4px 0; line-height:1.25; }
+.summary .label { color:#444; }
+
+.controls { display:flex; gap:8px; margin:10px 0 12px; flex-wrap:wrap; }
+button {
+  padding:6px 10px; cursor:pointer; border-radius:8px;
+  border:1px solid #e5e5e5; background:#f4f4f5; font-size:13px;
+}
+button:hover { background:#ededee; }
+button.danger { background:#ffecec; border-color:#ffd3d3; }
+button.danger:hover { background:#ffdada; }
+#openOptions {
+  padding:6px 10px; border-radius:8px; border:1px solid #e5e5e5;
+  background:#f4f4f5; font-size:13px; color:#222; text-decoration:none;
+  display:inline-flex; align-items:center;
+}
+#openOptions:hover { background:#ededee; }
+
+.card { padding:10px; background:#fff; border:1px solid #eee; border-radius:10px; }
+.row { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.muted { color:#666; }
+.footnote { margin-top:10px; }
+
+/* Chart layout */
+.chart-grid { display:grid; grid-template-columns: 1fr; gap:10px; }
+@media (min-width: 420px) {
+  body { width:420px; }
+  .chart-grid { grid-template-columns: 1fr 1fr; align-items:center; }
+}
+
+.chart-area {
+  width:100%; max-width:280px; margin:0 auto; padding:6px;
+  border:1px solid #e5e5e5; border-radius:8px; background:#fff;
+}
+
+/* Canvas is circular because width==height; style only */
+#moodChart { display:block; margin:0 auto; border-radius:6px; background:#fff; border:1px solid #f0f0f0; }
+
+/* Legend */
+.legend {
+  list-style:none; padding:0; margin:0;
+  display:grid; grid-template-columns: 1fr 1fr; gap:6px 10px; font-size:12px;
+}
+.legend li { display:flex; align-items:center; min-width:0; }
+.legend .dot {
+  width:10px; height:10px; border-radius:2px; margin-right:8px;
+  border:1px solid rgba(0,0,0,.25);
+}
+.legend strong { font-weight:600; }
+
+.card, .summary, .controls { overflow:hidden; }
