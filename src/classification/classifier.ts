@@ -62,14 +62,17 @@ export function classify(text: string): ClassifyResult {
       }
     }
 
-    // Guard: avoid single-emoji gaming false positives.
-    if (mood === 'gaming' && wHits === 0 && eHits < 2) {
-      score = 0;
-      matched[mood] = [];
-    }
-    // Funny vs happy emoji-only tie-break: 😂/🤣 strongly imply humor.
-    if (mood === 'funny' && wHits === 0 && eHits > 0) {
-      score += 0.1;
+    // Emoji-only adjustments (no word hits): per-mood guards from the rules
+    // table — minimum emoji hits to count, and a bonus for emojis that imply
+    // the mood on their own.
+    if (wHits === 0 && eHits > 0) {
+      const def = MOOD_DEFS[mood];
+      if (eHits < (def?.minEmojiOnlyHits ?? 1)) {
+        score = 0;
+        matched[mood] = [];
+      } else if (def?.emojiOnlyBonus) {
+        score += def.emojiOnlyBonus;
+      }
     }
 
     scores[mood] = score;

@@ -5,6 +5,13 @@ import type { MoodBucket } from '../lib/types.js';
 interface MoodDef {
   words: string[];
   emojis: string[];
+  // When a mood is matched by emoji only (no word hits), require at least this
+  // many emoji hits before it scores — guards against single-emoji false
+  // positives (e.g. one 🎮 in an unrelated caption). Defaults to 1.
+  minEmojiOnlyHits?: number;
+  // Bonus added when matched by emoji only — for emojis that strongly imply a
+  // mood on their own (e.g. 😂/🤣 imply humor). Defaults to 0.
+  emojiOnlyBonus?: number;
 }
 
 export const MOOD_DEFS: Record<string, MoodDef> = {
@@ -95,6 +102,9 @@ export const MOOD_DEFS: Record<string, MoodDef> = {
       'bit',
     ],
     emojis: ['😂', '🤣', '😹', '😆', '😅', '🙃', '🤡', '😜', '😝'],
+    // 😂/🤣 on their own strongly imply humor — nudge funny ahead of happy on
+    // emoji-only ties.
+    emojiOnlyBonus: 0.1,
   },
   romantic: {
     words: [
@@ -212,6 +222,9 @@ export const MOOD_DEFS: Record<string, MoodDef> = {
       'controller',
     ],
     emojis: ['🎮', '🕹️', '💻', '⌨️', '🖱️', '🏆', '🔥'],
+    // Several gaming emojis (💻🏆🔥) appear in unrelated captions, so require at
+    // least two emoji hits before counting gaming on emoji evidence alone.
+    minEmojiOnlyHits: 2,
   },
 };
 

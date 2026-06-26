@@ -215,19 +215,21 @@ export function buildDashboard(
   range: TimeRange = 'all',
   now: number = Date.now(),
 ): Dashboard {
+  // Use a single filtered set for every stat so counts and watch-times share
+  // the same denominator. filterSane drops <1s / >10min outliers; correctly
+  // recorded reels are already in range, so this only removes legacy garbage.
   const all = sanitizeRecords(rawRecords);
-  const records = filterByRange(all, range, now);
-  const sane = filterSane(records);
-  const watchTimes = sane.map((r) => r.watchedMs);
+  const records = filterSane(filterByRange(all, range, now));
+  const watchTimes = records.map((r) => r.watchedMs);
 
   const counts = countByMood(records);
-  const totalWatchedMs = sane.reduce((sum, r) => sum + r.watchedMs, 0);
+  const totalWatchedMs = records.reduce((sum, r) => sum + r.watchedMs, 0);
 
   return {
     range,
     totalReels: records.length,
     totalWatchedMs,
-    longestBingeMs: longestBinge(sane),
+    longestBingeMs: longestBinge(records),
     avgWatchMs: mean(watchTimes),
     medianWatchMs: median(watchTimes),
     byType: topCategories(counts),
