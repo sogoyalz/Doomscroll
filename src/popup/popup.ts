@@ -66,6 +66,10 @@ function formatShort(ms: number): string {
   return `${Math.round(totalSeconds / 60)}m`;
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function renderTypeBars(container: HTMLElement, byType: Dashboard['byType']) {
   const maxCount = Math.max(1, ...byType.map((t) => t.count));
   container.innerHTML = byType
@@ -99,7 +103,7 @@ function renderRecent(container: HTMLElement, records: ReelRecord[]) {
   container.innerHTML = records
     .map((r) => {
       const color = TYPE_COLORS[r.mood] || '#6b6b6b';
-      const title = r.caption || r.contextSample || 'Untitled reel';
+      const title = escapeHtml(r.caption || r.contextSample || 'Untitled reel');
       const seconds = Math.round(r.watchedMs / 1000);
       return `
         <li>
@@ -108,7 +112,7 @@ function renderRecent(container: HTMLElement, records: ReelRecord[]) {
             <div class="recent-title">${title}</div>
             <div class="recent-meta">${seconds}s</div>
           </span>
-          <span class="recent-badge" style="background:${color}22;color:${color}">${MOOD_LABELS[r.mood] || r.mood}</span>
+          <span class="recent-badge" style="background:${color}22;color:${color}">${MOOD_LABELS[r.mood] || escapeHtml(r.mood)}</span>
         </li>`;
     })
     .join('');
