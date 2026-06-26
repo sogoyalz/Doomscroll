@@ -1,7 +1,0 @@
-node_modules/
-dist/
-src/popup/popup.bundle.js
-src/popup/popup.bundle.js.map
-src/options/options.bundle.js
-src/options/options.bundle.js.map
-.DS_Store
