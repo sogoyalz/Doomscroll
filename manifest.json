@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Instagram Reel Tracker",
-  "short_name": "IG Reel Mood & Timing Tracker",
+  "name": "Doomscroll",
+  "short_name": "Doomscroll",
   "version": "6.0",
   "description": "Track Instagram Reels (count viewed reels, mood classification and charts).",
   "permissions": ["storage", "activeTab", "scripting"],

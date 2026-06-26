@@ -5,7 +5,7 @@ import { initDefaults } from '../lib/storage.js';
 import { handleMessage } from './messageHandlers.js';
 
 chrome.runtime.onInstalled.addListener((details) => {
-  console.log('InstaReel Tracker installed — reason:', details.reason);
+  console.log('Doomscroll installed — reason:', details.reason);
   initDefaults();
 });
 

@@ -14,7 +14,7 @@ declare global {
 }
 
 (() => {
-  console.log('InstaReel Tracker content script starting');
+  console.log('Doomscroll content script starting');
 
   // Caption text is captured while the reel is still on screen (onVisible),
   // not after it scrolls away (onWatched) — by then Instagram's virtualized

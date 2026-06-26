@@ -1,4 +1,4 @@
-# Instagram Reel Tracker
+# Doomscroll
 
 A Chrome (MV3) extension that tracks which Instagram Reels you actually watch,
 classifies their mood/topic from on-screen caption text, and shows a local
@@ -46,7 +46,7 @@ diagram.
    ```
 2. Open `chrome://extensions`, enable **Developer mode**.
 3. Click **Load unpacked** and select this folder
-   (`instagram-reel-tracker/`).
+   (`IG reel Tracker/`).
 4. Visit instagram.com and scroll through some reels — open the extension
    popup to see live stats.
 
