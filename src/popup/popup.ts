@@ -132,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const totalReelsEl = getEl('totalReels');
   const longestBingeEl = getEl('longestBinge');
   const avgPerReelEl = getEl('avgPerReel');
+  const reelsScrolledEl = getEl('reelsScrolled');
   const typeBarsEl = getEl('typeBars');
   const moodPillsEl = getEl('moodPills');
   const recentListEl = getEl('recentList');
@@ -155,9 +156,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function refresh() {
-    const data = await getAll({ reel_records: [] });
+    // reelsScrolledCount is a lifetime total (URL-change based), not range-aware,
+    // so it's read straight from storage rather than derived from records.
+    const data = await getAll({ reel_records: [], reelsScrolledCount: 0 });
     const dashboard = buildDashboard(data.reel_records || [], currentRange);
     render(dashboard);
+    reelsScrolledEl.textContent = String(data.reelsScrolledCount ?? 0);
   }
 
   rangeTabs.addEventListener('click', (e) => {
@@ -171,7 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && (changes.reel_records || changes.reelCount)) refresh();
+    if (area === 'local' && (changes.reel_records || changes.reelCount || changes.reelsScrolledCount))
+      refresh();
   });
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type === MESSAGE_TYPES.REEL_WATCHED) refresh();

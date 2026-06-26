@@ -5,6 +5,7 @@ import type { ReelRecord, StoredData } from './types.js';
 
 const DEFAULTS: StoredData = {
   reelCount: 0,
+  reelsScrolledCount: 0,
   reel_records: [],
   settings: { useLLM: false },
 };
@@ -33,9 +34,11 @@ export function onChanged(callback: (changes: { [key: string]: chrome.storage.St
 }
 
 export async function initDefaults(): Promise<void> {
-  const data = await getAll(['reelCount', 'reel_records', 'settings']);
+  const data = await getAll(['reelCount', 'reelsScrolledCount', 'reel_records', 'settings']);
   const patch: Partial<StoredData> = {};
   if (data.reelCount === undefined) patch.reelCount = DEFAULTS.reelCount;
+  if (data.reelsScrolledCount === undefined)
+    patch.reelsScrolledCount = DEFAULTS.reelsScrolledCount;
   if (!Array.isArray(data.reel_records)) patch.reel_records = DEFAULTS.reel_records;
   if (!data.settings) patch.settings = DEFAULTS.settings;
   if (Object.keys(patch).length) await set(patch);
@@ -66,6 +69,21 @@ export function appendRecord(
   return result;
 }
 
+// Bump the lifetime "reels scrolled" counter. Chained through the same queue as
+// appendRecord so the read-modify-write can't interleave with other writers and
+// lose increments (chrome.storage.local has no atomic increment).
+export function incrementScrolled(): Promise<{ reelsScrolledCount: number }> {
+  const result = appendQueue.then(async () => {
+    const data = await getAll({ reelsScrolledCount: 0 });
+    const reelsScrolledCount =
+      (typeof data.reelsScrolledCount === 'number' ? data.reelsScrolledCount : 0) + 1;
+    await set({ reelsScrolledCount });
+    return { reelsScrolledCount };
+  });
+  appendQueue = result.catch(() => {});
+  return result;
+}
+
 export async function clearAll(): Promise<void> {
-  await set({ reel_records: [], reelCount: 0 });
+  await set({ reel_records: [], reelCount: 0, reelsScrolledCount: 0 });
 }

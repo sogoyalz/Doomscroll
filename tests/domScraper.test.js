@@ -4,6 +4,8 @@ import {
   extractCaption,
   extractContextText,
   isLikelyReel,
+  shortcodeFromPath,
+  reelIdOf,
 } from '../src/content/domScraper.ts';
 
 // --- lightweight DOM fakes (avoid pulling in jsdom) ------------------------
@@ -124,5 +126,49 @@ describe('isLikelyReel', () => {
     globalThis.location = { pathname: '/explore/' };
     const video = { currentSrc: 'https://cdn/clip.mp4', src: '', closest: () => null };
     expect(isLikelyReel(video)).toBe(false);
+  });
+});
+
+describe('shortcodeFromPath', () => {
+  test('extracts the shortcode from /reel/<code>/ and /reels/<code>/', () => {
+    expect(shortcodeFromPath('/reel/Abc-123_/')).toBe('Abc-123_');
+    expect(shortcodeFromPath('/reels/CxYz9/')).toBe('CxYz9');
+  });
+
+  test('returns empty for the bare feed, non-reel paths, and nullish input', () => {
+    expect(shortcodeFromPath('/reels/')).toBe('');
+    expect(shortcodeFromPath('/')).toBe('');
+    expect(shortcodeFromPath('/explore/')).toBe('');
+    expect(shortcodeFromPath(null)).toBe('');
+  });
+
+  test('ignores known non-shortcode segments like audio/sound', () => {
+    expect(shortcodeFromPath('/reels/audio/123/')).toBe('');
+    expect(shortcodeFromPath('/reel/sound/123/')).toBe('');
+  });
+});
+
+describe('reelIdOf', () => {
+  afterEach(() => {
+    delete globalThis.location;
+  });
+
+  test('prefers the shortcode from the nearest reel permalink anchor', () => {
+    globalThis.location = { pathname: '/', href: 'https://www.instagram.com/' };
+    const video = {
+      closest: (sel) =>
+        sel.includes('/reel/') ? { href: 'https://www.instagram.com/reel/AbC123/' } : null,
+    };
+    expect(reelIdOf(video)).toBe('AbC123');
+  });
+
+  test('falls back to the current URL shortcode when no anchor matches', () => {
+    globalThis.location = { pathname: '/reels/Zz99/', href: 'https://www.instagram.com/reels/Zz99/' };
+    expect(reelIdOf({ closest: () => null })).toBe('Zz99');
+  });
+
+  test('returns empty when neither anchor nor URL is a reel permalink', () => {
+    globalThis.location = { pathname: '/', href: 'https://www.instagram.com/' };
+    expect(reelIdOf({ closest: () => null })).toBe('');
   });
 });

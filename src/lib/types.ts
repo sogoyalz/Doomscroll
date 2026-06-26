@@ -4,6 +4,9 @@ import type { MOOD_ORDER } from '../classification/rules.js';
 
 export const MESSAGE_TYPES = {
   REEL_WATCHED: 'REEL_WATCHED',
+  // A new reel was navigated to (the /reels/<shortcode> URL changed). Counts
+  // raw throughput ("reels scrolled"), independent of whether it was watched.
+  REEL_SCROLLED: 'REEL_SCROLLED',
   ML_CLASSIFY_REQUEST: 'ML_CLASSIFY_REQUEST',
 } as const;
 
@@ -51,6 +54,9 @@ export interface Settings {
 
 export interface StoredData {
   reelCount: number;
+  // Lifetime count of reels scrolled past (URL-change based), distinct from
+  // reelCount which only counts reels actually watched ≥ MIN_WATCH_MS.
+  reelsScrolledCount: number;
   reel_records: ReelRecord[];
   settings: Settings;
 }

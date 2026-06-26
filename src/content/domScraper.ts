@@ -64,6 +64,35 @@ export function extractCaption(contextText: string | null | undefined, maxLen = 
   return (lastSpace > 20 ? truncated.slice(0, lastSpace) : truncated) + '…';
 }
 
+// The canonical Instagram reel shortcode from a URL path like /reel/<code>/ or
+// /reels/<code>/. Returns '' when the path isn't a single-reel permalink (e.g.
+// the bare /reels/ feed, or /reels/audio/...). The shortcode is stable across
+// IG's DOM/element reuse, so it's a better reel identity than the media src.
+const NON_SHORTCODE_SEGMENTS = new Set(['audio', 'sound']);
+export function shortcodeFromPath(pathname: string | null | undefined): string {
+  const m = /^\/reels?\/([A-Za-z0-9_-]+)/.exec(pathname || '');
+  const code = m?.[1];
+  if (!code) return '';
+  return NON_SHORTCODE_SEGMENTS.has(code) ? '' : code;
+}
+
+// Best canonical identity for a reel <video>: prefer the Instagram shortcode
+// (from the nearest reel permalink anchor, then the current URL); fall back to
+// '' so callers can use the media src as before.
+export function reelIdOf(video: HTMLVideoElement | null | undefined): string {
+  try {
+    if (!video) return '';
+    const a = video.closest('a[href*="/reel/"], a[href*="/reels/"]') as HTMLAnchorElement | null;
+    if (a?.href) {
+      const code = shortcodeFromPath(new URL(a.href, location.href).pathname);
+      if (code) return code;
+    }
+    return shortcodeFromPath(location.pathname);
+  } catch {
+    return '';
+  }
+}
+
 export function isLikelyReel(video: HTMLVideoElement | null | undefined): boolean {
   try {
     if (!video) return false;

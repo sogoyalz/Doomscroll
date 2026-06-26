@@ -69,3 +69,45 @@ describe('appendRecord', () => {
     expect(store.reelCount).toBe(2005);
   });
 });
+
+describe('incrementScrolled', () => {
+  let getStore;
+
+  beforeEach(() => {
+    vi.resetModules();
+    getStore = installFakeChromeStorage();
+  });
+
+  test('increments reelsScrolledCount from zero', async () => {
+    const { incrementScrolled } = await import('../src/lib/storage.ts');
+
+    const { reelsScrolledCount } = await incrementScrolled();
+
+    expect(reelsScrolledCount).toBe(1);
+    expect(getStore().reelsScrolledCount).toBe(1);
+  });
+
+  test('concurrent increments do not clobber each other', async () => {
+    const { incrementScrolled } = await import('../src/lib/storage.ts');
+
+    await Promise.all([incrementScrolled(), incrementScrolled(), incrementScrolled()]);
+
+    expect(getStore().reelsScrolledCount).toBe(3);
+  });
+
+  test('scrolled and watched counters stay independent under concurrency', async () => {
+    const { appendRecord, incrementScrolled } = await import('../src/lib/storage.ts');
+
+    await Promise.all([
+      appendRecord({ id: 1 }),
+      incrementScrolled(),
+      incrementScrolled(),
+      appendRecord({ id: 2 }),
+    ]);
+
+    const store = getStore();
+    expect(store.reelCount).toBe(2);
+    expect(store.reelsScrolledCount).toBe(2);
+    expect(store.reel_records).toHaveLength(2);
+  });
+});

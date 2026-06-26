@@ -14,19 +14,23 @@ interface VideoState {
   // excluded from watch duration — a reel sitting paused on screen isn't
   // "watched". Mirrors the tab-hidden accounting in onHide/onShow.
   pausedAt: number | null;
-  // The reel's media src, used to detect Instagram reusing a <video> element
-  // for a different reel so the new reel can be tracked independently.
-  src: string;
+  // The reel's identity (shortcode if available, else media src), used to detect
+  // Instagram reusing a <video> element for a different reel so the new reel can
+  // be tracked independently.
+  id: string;
 }
 
 export type OnWatched = (video: HTMLVideoElement, watchedMs: number) => void;
 export type OnVisible = (video: HTMLVideoElement) => void;
+export type IdOf = (video: HTMLVideoElement) => string;
 
 function srcOf(video: HTMLVideoElement): string {
   return video.currentSrc || video.src || '';
 }
 
-export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) {
+// idOf computes a reel's identity for element-reuse detection. Defaults to the
+// media src; content.ts injects a shortcode-preferring variant (see reelIdOf).
+export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible, idOf: IdOf = srcOf) {
   const videoState = new WeakMap<HTMLVideoElement, VideoState>();
   // Tracks videos currently being timed so we can pause/resume on tab hide/show.
   const watchingSet = new Set<HTMLVideoElement>();
@@ -34,7 +38,7 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) 
   const now = () => Date.now();
 
   function freshState(video: HTMLVideoElement): VideoState {
-    return { watching: false, start: null, recorded: false, pausedAt: null, src: srcOf(video) };
+    return { watching: false, start: null, recorded: false, pausedAt: null, id: idOf(video) };
   }
 
   function handleEntry(entry: IntersectionObserverEntry) {
@@ -103,11 +107,11 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) 
     try {
       const existing = videoState.get(video);
       if (existing) {
-        // Instagram reuses video elements for different reels. If the src
+        // Instagram reuses video elements for different reels. If the identity
         // changed and we're not mid-count, reset so the new reel can be
         // tracked (and counted) independently of the old one.
-        const src = srcOf(video);
-        if (src && existing.src && src !== existing.src && !existing.watching) {
+        const id = idOf(video);
+        if (id && existing.id && id !== existing.id && !existing.watching) {
           watchingSet.delete(video);
           videoState.set(video, freshState(video));
         }

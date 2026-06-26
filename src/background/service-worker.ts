@@ -1,6 +1,6 @@
 // Background service worker — message router + lifecycle events.
 
-import { initDefaults, getAll, appendRecord } from '../lib/storage.js';
+import { initDefaults, getAll, appendRecord, incrementScrolled } from '../lib/storage.js';
 import { MESSAGE_TYPES } from '../lib/types.js';
 import { classify as classifyHeuristic } from '../classification/classifier.js';
 import { classify as classifyLLM } from '../classification/llmClassifier.js';
@@ -75,11 +75,17 @@ interface ReelWatchedMessage {
   record: RawReelRecord;
 }
 
-type Handler = (message: ReelWatchedMessage) => Promise<unknown>;
+interface ReelScrolledMessage {
+  type: typeof MESSAGE_TYPES.REEL_SCROLLED;
+  shortcode?: string;
+}
+
+type IncomingMessage = ReelWatchedMessage | ReelScrolledMessage;
+type Handler = (message: IncomingMessage) => Promise<unknown>;
 
 const handlers: Record<string, Handler> = {
   async [MESSAGE_TYPES.REEL_WATCHED](message) {
-    const { contextText, ...rest } = message.record;
+    const { contextText, ...rest } = (message as ReelWatchedMessage).record;
     const { mood, score, matched } = await classifyText(contextText);
     const record: ReelRecord = {
       ...rest,
@@ -90,6 +96,11 @@ const handlers: Record<string, Handler> = {
     const { reelCount, record: savedRecord } = await appendRecord(record);
     return { reelCount, record: savedRecord };
   },
+
+  async [MESSAGE_TYPES.REEL_SCROLLED]() {
+    const { reelsScrolledCount } = await incrementScrolled();
+    return { reelsScrolledCount };
+  },
 };
 
 chrome.runtime.onMessage.addListener(
@@ -97,7 +108,7 @@ chrome.runtime.onMessage.addListener(
     const handler = message?.type ? handlers[message.type] : undefined;
     if (!handler) return false;
 
-    handler(message as ReelWatchedMessage)
+    handler(message as IncomingMessage)
       .then((result) => sendResponse({ ok: true, ...(result as object) }))
       .catch((err) => sendResponse({ ok: false, error: String(err) }));
 

@@ -3,7 +3,13 @@
 // and reports finished views to the background service worker.
 
 import { createReelDetector } from './reelDetector.js';
-import { extractContextText, extractCaption, isLikelyReel } from './domScraper.js';
+import {
+  extractContextText,
+  extractCaption,
+  isLikelyReel,
+  reelIdOf,
+  shortcodeFromPath,
+} from './domScraper.js';
 import { MESSAGE_TYPES } from '../lib/types.js';
 import type { RawReelRecord } from '../lib/types.js';
 
@@ -47,14 +53,45 @@ declare global {
     }
   }
 
-  const detector = createReelDetector(handleWatched, handleVisible);
+  // Identity prefers the Instagram shortcode (stable across IG's element reuse),
+  // falling back to the media src when no permalink/URL shortcode is available.
+  const detector = createReelDetector(
+    handleWatched,
+    handleVisible,
+    (video) => reelIdOf(video) || video.currentSrc || video.src || '',
+  );
+
+  // "Reels scrolled": IG updates the URL to /reels/<shortcode> as you scroll the
+  // reels surface. Each new shortcode = one reel navigated past, counted
+  // independently of whether it was watched long enough to record. Content
+  // scripts can't intercept the page's own history.pushState (separate JS world),
+  // so we detect changes by re-checking the URL on DOM mutations + popstate.
+  let lastShortcode = '';
+  function checkUrlChange() {
+    const code = shortcodeFromPath(location.pathname);
+    if (!code || code === lastShortcode) return;
+    lastShortcode = code;
+    try {
+      chrome.runtime.sendMessage({ type: MESSAGE_TYPES.REEL_SCROLLED, shortcode: code });
+    } catch {
+      // service worker asleep / context invalidated during reload
+    }
+  }
+  checkUrlChange();
 
   detector.scanAndObserve();
-  const mo = new MutationObserver(() => detector.scanAndObserve());
+  const mo = new MutationObserver(() => {
+    detector.scanAndObserve();
+    checkUrlChange();
+  });
   mo.observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('popstate', checkUrlChange);
 
   // Heartbeat: rescan every 2s as an SPA safety net (IG navigates without full reloads).
-  const heartbeat = setInterval(() => detector.scanAndObserve(), 2000);
+  const heartbeat = setInterval(() => {
+    detector.scanAndObserve();
+    checkUrlChange();
+  }, 2000);
 
   // Exclude time spent with the tab hidden from watch-time totals.
   document.addEventListener('visibilitychange', () => {
@@ -65,6 +102,7 @@ declare global {
   window.addEventListener('beforeunload', () => {
     detector.disconnect();
     mo.disconnect();
+    window.removeEventListener('popstate', checkUrlChange);
     clearInterval(heartbeat);
   });
 
