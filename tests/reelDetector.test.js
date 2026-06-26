@@ -205,6 +205,70 @@ describe('createReelDetector', () => {
     vi.useRealTimers();
   });
 
+  test('does not double-subtract when tab-hide overlaps the auto-pause', () => {
+    // Regression: tabbing away fires BOTH onHide and the video's `pause` event
+    // for the same interval. The hidden span must be excluded once, not twice.
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+
+    const onWatched = vi.fn();
+    const detector = createReelDetector(onWatched, vi.fn());
+
+    const video = makeVideo('blob:reel-1');
+    detector.scanAndObserve({ querySelectorAll: () => [video] });
+
+    fireEntry(video, true, 0.9); // start watching at t=10000
+
+    vi.setSystemTime(11_000);
+    detector.onHide(); // tab hidden at t=11000 (1s real watch)
+    video.paused = true;
+    video._fire('pause'); // IG auto-pauses just after hiding
+
+    vi.setSystemTime(13_000);
+    video.paused = false;
+    video._fire('play'); // IG auto-resumes on return
+    detector.onShow(); // tab visible again at t=13000 (2s hidden total)
+
+    vi.setSystemTime(14_500);
+    fireEntry(video, false, 0); // scrolled past at t=14500
+
+    // 1s before hide + 1.5s after show = 2500ms; the 2s hidden span is excluded
+    // exactly once (not 4500ms counted, nor 500ms from a double subtraction).
+    expect(onWatched).toHaveBeenCalledWith(video, 2500);
+    vi.useRealTimers();
+  });
+
+  test('keeps a reel paused before tab-hide excluded after returning still-paused', () => {
+    // A reel the user paused, then tabbed away from, then returned to without
+    // resuming: the whole idle span (pause through exit) must stay excluded.
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+
+    const onWatched = vi.fn();
+    const detector = createReelDetector(onWatched, vi.fn());
+
+    const video = makeVideo('blob:reel-1');
+    detector.scanAndObserve({ querySelectorAll: () => [video] });
+
+    fireEntry(video, true, 0.9); // start watching at t=10000
+
+    vi.setSystemTime(11_000);
+    video.paused = true;
+    video._fire('pause'); // user pauses at t=11000 (1s watched)
+
+    vi.setSystemTime(12_000);
+    detector.onHide(); // tab hidden while already paused
+    vi.setSystemTime(15_000);
+    detector.onShow(); // back, but the reel is still paused (no play event)
+
+    vi.setSystemTime(16_000);
+    fireEntry(video, false, 0); // scrolled past, still paused
+
+    // Only the 1s before the pause counts; everything after stays excluded.
+    expect(onWatched).toHaveBeenCalledWith(video, 1000);
+    vi.useRealTimers();
+  });
+
   test('counts again after the element is reused for a new reel (src change)', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);

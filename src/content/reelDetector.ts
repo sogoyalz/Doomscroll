@@ -10,10 +10,15 @@ interface VideoState {
   watching: boolean;
   start: number | null;
   recorded: boolean;
-  // When the currently-watched video paused (else null). Paused time is
-  // excluded from watch duration — a reel sitting paused on screen isn't
-  // "watched". Mirrors the tab-hidden accounting in onHide/onShow.
-  pausedAt: number | null;
+  // The clock is "stopped" while the reel is paused and/or the tab is hidden —
+  // neither counts as watching. These two reasons can overlap (tabbing away
+  // auto-pauses the video), so we track them independently and anchor a single
+  // `stoppedAt` to when the clock *first* stopped. The excluded span is added
+  // back exactly once, when the last reason clears (see stopClock/resumeClock),
+  // so an overlapping pause+hide is never subtracted twice.
+  paused: boolean;
+  hidden: boolean;
+  stoppedAt: number | null;
   // The reel's identity (shortcode if available, else media src), used to detect
   // Instagram reusing a <video> element for a different reel so the new reel can
   // be tracked independently.
@@ -34,11 +39,37 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible, 
   const videoState = new WeakMap<HTMLVideoElement, VideoState>();
   // Tracks videos currently being timed so we can pause/resume on tab hide/show.
   const watchingSet = new Set<HTMLVideoElement>();
-  let hiddenAt: number | null = null;
   const now = () => Date.now();
 
   function freshState(video: HTMLVideoElement): VideoState {
-    return { watching: false, start: null, recorded: false, pausedAt: null, id: idOf(video) };
+    return {
+      watching: false,
+      start: null,
+      recorded: false,
+      paused: false,
+      hidden: false,
+      stoppedAt: null,
+      id: idOf(video),
+    };
+  }
+
+  // Stop the watch clock for one reason. Anchors stoppedAt to the first reason
+  // so concurrent reasons (pause + tab-hidden) share a single excluded span.
+  function stopClock(state: VideoState, reason: 'paused' | 'hidden') {
+    if (!state.watching) return;
+    state[reason] = true;
+    if (state.stoppedAt === null) state.stoppedAt = now();
+  }
+
+  // Clear one reason. Only once *every* reason is cleared do we shift `start`
+  // forward by the stopped span — so the excluded time is counted exactly once,
+  // regardless of the order pause/play and hide/show events arrive in.
+  function resumeClock(state: VideoState, reason: 'paused' | 'hidden') {
+    state[reason] = false;
+    if (!state.paused && !state.hidden && state.stoppedAt !== null) {
+      state.start = (state.start ?? now()) + (now() - state.stoppedAt);
+      state.stoppedAt = null;
+    }
   }
 
   function handleEntry(entry: IntersectionObserverEntry) {
@@ -56,17 +87,22 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible, 
       state.start = now();
       // If the video is already paused when it scrolls into view, don't count
       // the idle time until it actually starts playing.
-      state.pausedAt = video.paused === true ? now() : null;
+      state.paused = video.paused === true;
+      state.hidden = false;
+      state.stoppedAt = state.paused ? now() : null;
       watchingSet.add(video);
       if (onVisible) onVisible(video);
     } else if (!isVisible && state.watching) {
-      // If the reel is still paused at exit, stop the clock at the pause point
-      // rather than at exit so the paused tail isn't counted.
-      const end = state.pausedAt !== null ? state.pausedAt : now();
+      // If the clock is still stopped at exit (reel paused and/or tab hidden),
+      // end at the point it stopped rather than at exit so the idle tail isn't
+      // counted.
+      const end = state.stoppedAt !== null ? state.stoppedAt : now();
       const watchedMs = end - (state.start ?? now());
       state.watching = false;
       state.start = null;
-      state.pausedAt = null;
+      state.paused = false;
+      state.hidden = false;
+      state.stoppedAt = null;
       watchingSet.delete(video);
 
       // Only count when the user scrolled forward (down): the video exited
@@ -91,16 +127,12 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible, 
 
   function handlePause(video: HTMLVideoElement) {
     const st = videoState.get(video);
-    if (st?.watching && st.pausedAt === null) st.pausedAt = now();
+    if (st) stopClock(st, 'paused');
   }
 
   function handlePlay(video: HTMLVideoElement) {
     const st = videoState.get(video);
-    if (st?.watching && st.pausedAt !== null) {
-      // Shift start forward by the paused duration so it isn't counted.
-      st.start = (st.start ?? now()) + (now() - st.pausedAt);
-      st.pausedAt = null;
-    }
+    if (st) resumeClock(st, 'paused');
   }
 
   function observeVideo(video: HTMLVideoElement) {
@@ -138,24 +170,24 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible, 
     root.querySelectorAll('video').forEach(observeVideo);
   }
 
-  // Call when the tab becomes hidden. Stores the hide time so onShow() can
-  // subtract it from each active timer, excluding hidden time from watch totals.
+  // Call when the tab becomes hidden. Stops the clock on every active timer for
+  // the "hidden" reason; the elapsed hidden span is excluded on onShow(). Going
+  // through stopClock means a reel already paused when the tab hides keeps its
+  // single stoppedAt anchor rather than starting a second, overlapping one.
   function onHide() {
-    hiddenAt = now();
-  }
-
-  // Call when the tab becomes visible again. Shifts every active start time
-  // forward by the time spent hidden so that gap is not counted as watch time.
-  function onShow() {
-    if (hiddenAt === null) return;
-    const hiddenMs = now() - hiddenAt;
-    hiddenAt = null;
     for (const video of watchingSet) {
       const state = videoState.get(video);
-      if (state?.start !== null && state?.start !== undefined) {
-        state.start += hiddenMs;
-        videoState.set(video, state);
-      }
+      if (state) stopClock(state, 'hidden');
+    }
+  }
+
+  // Call when the tab becomes visible again. Clears the "hidden" reason; the
+  // clock only resumes once the reel is also unpaused (resumeClock), so a reel
+  // the user had paused before tabbing away isn't counted as watched on return.
+  function onShow() {
+    for (const video of watchingSet) {
+      const state = videoState.get(video);
+      if (state) resumeClock(state, 'hidden');
     }
   }
 
