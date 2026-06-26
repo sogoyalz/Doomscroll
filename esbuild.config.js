@@ -7,6 +7,7 @@ const entryPoints = {
   'service-worker.bundle': 'src/background/service-worker.ts',
   'popup.bundle': 'src/popup/popup.ts',
   'options.bundle': 'src/options/options.ts',
+  'offscreen.bundle': 'src/offscreen/offscreen.ts',
 };
 
 async function build() {

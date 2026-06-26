@@ -11,10 +11,32 @@ chrome.runtime.onInstalled.addListener((details) => {
   initDefaults();
 });
 
-// Tracks whether the options page has its on-device ML model loaded and ready.
-let mlClassifierReady = false;
+// The on-device ML model runs in an offscreen document so it works in the
+// background without the options page being open. We create the document
+// lazily on first use and reuse it; only one offscreen document may exist.
+let offscreenReady: Promise<void> | null = null;
 
-async function classifyViaMLPage(text: string): Promise<ClassifyResult> {
+function ensureOffscreen(): Promise<void> {
+  if (!offscreenReady) {
+    offscreenReady = chrome.offscreen
+      .createDocument({
+        url: 'src/offscreen/offscreen.html',
+        reasons: [chrome.offscreen.Reason.WORKERS],
+        justification: 'Run the on-device transformers.js mood classifier (WASM).',
+      })
+      .catch((err: unknown) => {
+        // A document already exists → fine to reuse. Anything else: reset so we retry.
+        if (!String(err).includes('single offscreen')) {
+          offscreenReady = null;
+          throw err;
+        }
+      });
+  }
+  return offscreenReady;
+}
+
+async function classifyViaOffscreen(text: string): Promise<ClassifyResult> {
+  await ensureOffscreen();
   const response = await chrome.runtime.sendMessage({
     type: MESSAGE_TYPES.ML_CLASSIFY_REQUEST,
     text,
@@ -26,12 +48,11 @@ async function classifyViaMLPage(text: string): Promise<ClassifyResult> {
 async function classifyText(text: string): Promise<ClassifyResult> {
   const { settings } = await getAll({ settings: { useLLM: false } });
 
-  if (settings?.useMLClassifier && mlClassifierReady) {
+  if (settings?.useMLClassifier) {
     try {
-      return await classifyViaMLPage(text);
+      return await classifyViaOffscreen(text);
     } catch (err) {
       console.warn('On-device ML classification failed, falling back', err);
-      mlClassifierReady = false;
     }
   }
 
@@ -68,11 +89,6 @@ const handlers: Record<string, Handler> = {
     };
     const { reelCount, record: savedRecord } = await appendRecord(record);
     return { reelCount, record: savedRecord };
-  },
-
-  async [MESSAGE_TYPES.ML_CLASSIFIER_READY]() {
-    mlClassifierReady = true;
-    return {};
   },
 };
 

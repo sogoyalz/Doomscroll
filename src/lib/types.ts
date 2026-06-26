@@ -5,7 +5,6 @@ import type { MOOD_ORDER } from '../classification/rules.js';
 export const MESSAGE_TYPES = {
   REEL_WATCHED: 'REEL_WATCHED',
   ML_CLASSIFY_REQUEST: 'ML_CLASSIFY_REQUEST',
-  ML_CLASSIFIER_READY: 'ML_CLASSIFIER_READY',
 } as const;
 
 export type Mood = (typeof MOOD_ORDER)[number] | 'undetectable';
