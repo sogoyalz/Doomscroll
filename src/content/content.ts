@@ -4,7 +4,7 @@
 
 import { createReelDetector } from './reelDetector.js';
 import { extractContextText, extractCaption, isLikelyReel } from './domScraper.js';
-import { MESSAGE_TYPES } from '../lib/messages.js';
+import { MESSAGE_TYPES } from '../lib/types.js';
 import type { RawReelRecord } from '../lib/types.js';
 
 declare global {

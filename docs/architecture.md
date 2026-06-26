@@ -7,46 +7,62 @@ instagram.com page
       │
       ▼
 ┌─────────────────────────────┐
-│ content/content.js          │  "the eyes"
-│  ├─ reelDetector.js         │  IntersectionObserver: is a <video> ≥65%
-│  │                          │  visible for ≥1s? -> onWatched(video, ms)
-│  └─ domScraper.js           │  isLikelyReel(), extractContextText()
-└─────────────────────────────┘
-      │  classify(contextText)
-      ▼
-┌─────────────────────────────┐
-│ classification/classifier.js│  keyword/emoji scoring -> { mood, score, ... }
-│   (rules.js: keyword tables)│  swap for llmClassifier.js behind same API
+│ content/content.ts          │  "the eyes"
+│  ├─ reelDetector.ts         │  IntersectionObserver: is a <video> ≥65%
+│  │                          │  visible for ≥1s going forward? -> onWatched(video, ms)
+│  └─ domScraper.ts           │  isLikelyReel(), extractContextText()
 └─────────────────────────────┘
       │  chrome.runtime.sendMessage({ type: REEL_WATCHED, record })
       ▼
 ┌─────────────────────────────┐
-│ background/service-worker.js│  "the brain" — never touches the page
-│  └─ messageHandlers.js      │  routes REEL_WATCHED -> storage.appendRecord()
+│ background/service-worker.ts│  "the brain" — never touches the page
+│                             │  classifyText() -> appendRecord() -> storage
 └─────────────────────────────┘
       │  chrome.storage.local
       ▼
 ┌─────────────────────────────┐      ┌─────────────────────────────┐
-│ popup/popup.js               │      │ options/options.js          │
+│ popup/popup.ts              │      │ options/options.ts           │
 │  reads storage, renders      │      │  LLM toggle, export, clear  │
-│  totals + canvas pie chart   │      │                             │
+│  totals + mood breakdown     │      │  hosts on-device ML model   │
 └─────────────────────────────┘      └─────────────────────────────┘
 ```
+
+## Classification pipeline
+
+```
+contextText
+    │
+    ▼
+classification/classifier.ts   keyword/emoji scoring (always available)
+    │  falls back if LLM/ML unavailable
+    ├─ classification/llmClassifier.ts    Claude API (requires API key in settings)
+    └─ classification/transformersClassifier.ts  on-device ONNX model (options page)
+```
+
+All three expose the same `classify(text): ClassifyResult` signature so the
+background worker can swap engines without touching call sites.
+
+## Shared modules
+
+| File | Purpose |
+|------|---------|
+| `src/lib/types.ts` | All shared types + `MESSAGE_TYPES` constants |
+| `src/lib/storage.ts` | `chrome.storage.local` wrapper, serialized `appendRecord` |
+| `src/lib/stats.ts` | Pure aggregation functions (records → dashboard data) |
 
 ## Design decisions
 
 - **Classification is isolated behind one function signature**
   (`classify(text) -> { mood, score, matched, wordHits, emojiHits }`) so the
-  v1 keyword heuristic (`classifier.js` + `rules.js`) can be replaced with an
-  LLM call (`llmClassifier.js`) without changing `content.js` or the popup.
-- **The content script never writes to storage directly.** It only sends a
-  `REEL_WATCHED` message; the service worker owns all writes. This keeps the
-  page-facing code free of storage logic and avoids races between multiple
-  tabs writing concurrently (`storage.appendRecord` does a single
-  get-then-set per message).
-- **`lib/stats.js` is pure** (records in, summary out, no `chrome.*` calls),
-  so it's unit-testable without mocking the extension APIs and is shared
-  between the popup's live view and any future export/reporting feature.
-- **Dwell detection guards against tab-stuck-visible durations** by clamping
-  watched time to 10 minutes — a reel left open in a backgrounded/minimized
-  tab shouldn't skew average watch time.
+  keyword heuristic can be replaced with an LLM or on-device model without
+  changing the background worker or popup.
+- **The content script never writes storage directly.** It sends a
+  `REEL_WATCHED` message; the service worker owns all writes. This avoids
+  races between concurrent tabs (`storage.appendRecord` serializes writes).
+- **`lib/stats.ts` is pure** (records in, summary out, no `chrome.*` calls),
+  so it's unit-testable without mocking extension APIs.
+- **Watch time excludes tab-hidden time.** A `visibilitychange` listener
+  pauses the timer when the tab is hidden and resumes it on return.
+- **Scroll-up does not count.** A reel is only recorded when the video exits
+  above the viewport (`boundingClientRect.top < 0`), meaning the user
+  scrolled forward past it.

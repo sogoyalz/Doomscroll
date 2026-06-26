@@ -6,7 +6,7 @@
 // classification requests relayed from the background worker while open.
 
 import { getAll, set, clearAll } from '../lib/storage.js';
-import { MESSAGE_TYPES } from '../lib/messages.js';
+import { MESSAGE_TYPES } from '../lib/types.js';
 import type { Settings } from '../lib/types.js';
 
 const DEFAULT_SETTINGS: Settings = {
@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'insta_reel_data.csv';
+    a.download = 'doomscroll_data.csv';
     a.click();
     URL.revokeObjectURL(url);
   });

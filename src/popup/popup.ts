@@ -2,7 +2,7 @@
 
 import { getAll } from '../lib/storage.js';
 import { buildDashboard, type Dashboard, type TimeRange } from '../lib/stats.js';
-import { MESSAGE_TYPES } from '../lib/messages.js';
+import { MESSAGE_TYPES } from '../lib/types.js';
 import type { Mood, MoodBucket, ReelRecord } from '../lib/types.js';
 
 const MOOD_LABELS: Record<Mood, string> = {
@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'insta_reel_data.csv';
+    a.download = 'doomscroll_data.csv';
     a.click();
     URL.revokeObjectURL(url);
   });
