@@ -10,10 +10,21 @@ interface VideoState {
   watching: boolean;
   start: number | null;
   recorded: boolean;
+  // When the currently-watched video paused (else null). Paused time is
+  // excluded from watch duration — a reel sitting paused on screen isn't
+  // "watched". Mirrors the tab-hidden accounting in onHide/onShow.
+  pausedAt: number | null;
+  // The reel's media src, used to detect Instagram reusing a <video> element
+  // for a different reel so the new reel can be tracked independently.
+  src: string;
 }
 
 export type OnWatched = (video: HTMLVideoElement, watchedMs: number) => void;
 export type OnVisible = (video: HTMLVideoElement) => void;
+
+function srcOf(video: HTMLVideoElement): string {
+  return video.currentSrc || video.src || '';
+}
 
 export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) {
   const videoState = new WeakMap<HTMLVideoElement, VideoState>();
@@ -22,12 +33,16 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) 
   let hiddenAt: number | null = null;
   const now = () => Date.now();
 
+  function freshState(video: HTMLVideoElement): VideoState {
+    return { watching: false, start: null, recorded: false, pausedAt: null, src: srcOf(video) };
+  }
+
   function handleEntry(entry: IntersectionObserverEntry) {
     const video = entry.target as HTMLVideoElement;
     if (!video) return;
     let state = videoState.get(video);
     if (!state) {
-      state = { watching: false, start: null, recorded: false };
+      state = freshState(video);
       videoState.set(video, state);
     }
     const isVisible = entry.isIntersecting && entry.intersectionRatio >= VISIBILITY_THRESHOLD;
@@ -35,12 +50,19 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) 
     if (isVisible && !state.watching) {
       state.watching = true;
       state.start = now();
+      // If the video is already paused when it scrolls into view, don't count
+      // the idle time until it actually starts playing.
+      state.pausedAt = video.paused === true ? now() : null;
       watchingSet.add(video);
       if (onVisible) onVisible(video);
     } else if (!isVisible && state.watching) {
-      const watchedMs = now() - (state.start ?? now());
+      // If the reel is still paused at exit, stop the clock at the pause point
+      // rather than at exit so the paused tail isn't counted.
+      const end = state.pausedAt !== null ? state.pausedAt : now();
+      const watchedMs = end - (state.start ?? now());
       state.watching = false;
       state.start = null;
+      state.pausedAt = null;
       watchingSet.delete(video);
 
       // Only count when the user scrolled forward (down): the video exited
@@ -63,17 +85,45 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) 
     threshold: [VISIBILITY_THRESHOLD],
   });
 
+  function handlePause(video: HTMLVideoElement) {
+    const st = videoState.get(video);
+    if (st?.watching && st.pausedAt === null) st.pausedAt = now();
+  }
+
+  function handlePlay(video: HTMLVideoElement) {
+    const st = videoState.get(video);
+    if (st?.watching && st.pausedAt !== null) {
+      // Shift start forward by the paused duration so it isn't counted.
+      st.start = (st.start ?? now()) + (now() - st.pausedAt);
+      st.pausedAt = null;
+    }
+  }
+
   function observeVideo(video: HTMLVideoElement) {
     try {
-      if (!videoState.has(video)) {
-        videoState.set(video, { watching: false, start: null, recorded: false });
-        observer.observe(video);
-        // Instagram reuses video elements for different reels. When the src
-        // changes, reset state so the new reel can be tracked independently.
+      const existing = videoState.get(video);
+      if (existing) {
+        // Instagram reuses video elements for different reels. If the src
+        // changed and we're not mid-count, reset so the new reel can be
+        // tracked (and counted) independently of the old one.
+        const src = srcOf(video);
+        if (src && existing.src && src !== existing.src && !existing.watching) {
+          watchingSet.delete(video);
+          videoState.set(video, freshState(video));
+        }
+        return;
+      }
+      videoState.set(video, freshState(video));
+      observer.observe(video);
+      if (typeof video.addEventListener === 'function') {
+        // loadstart fires when a new reel loads into a reused element — reset
+        // state (covers src changes that happen between scans).
         video.addEventListener('loadstart', () => {
           watchingSet.delete(video);
-          videoState.set(video, { watching: false, start: null, recorded: false });
+          videoState.set(video, freshState(video));
         });
+        video.addEventListener('pause', () => handlePause(video));
+        video.addEventListener('play', () => handlePlay(video));
       }
     } catch {
       // ignore

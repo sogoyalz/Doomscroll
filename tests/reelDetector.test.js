@@ -35,6 +35,23 @@ describe('createReelDetector', () => {
     observer.callback([{ target: video, isIntersecting, intersectionRatio, boundingClientRect }]);
   }
 
+  // A fake <video> that supports play/pause events and a mutable currentSrc,
+  // for exercising the scanAndObserve path (which attaches the listeners).
+  function makeVideo(src = '') {
+    const listeners = {};
+    return {
+      currentSrc: src,
+      src: '',
+      paused: false,
+      addEventListener(type, cb) {
+        (listeners[type] = listeners[type] || []).push(cb);
+      },
+      _fire(type) {
+        (listeners[type] || []).forEach((cb) => cb());
+      },
+    };
+  }
+
   test('calls onVisible when a video becomes visible', () => {
     const onWatched = vi.fn();
     const onVisible = vi.fn();
@@ -157,6 +174,63 @@ describe('createReelDetector', () => {
 
     // Should count 1s (before hide) + 1.5s (after show) = 2500ms, not 4500ms
     expect(onWatched).toHaveBeenCalledWith(video, 2500);
+    vi.useRealTimers();
+  });
+
+  test('excludes paused time from watch duration', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+
+    const onWatched = vi.fn();
+    const detector = createReelDetector(onWatched, vi.fn());
+
+    const video = makeVideo('blob:reel-1');
+    detector.scanAndObserve({ querySelectorAll: () => [video] }); // attaches play/pause listeners
+
+    fireEntry(video, true, 0.9); // start watching at t=10000
+
+    vi.setSystemTime(11_000);
+    video.paused = true;
+    video._fire('pause'); // paused at t=11000 (1s watched so far)
+
+    vi.setSystemTime(14_000);
+    video.paused = false;
+    video._fire('play'); // resumed at t=14000 (3s paused, excluded)
+
+    vi.setSystemTime(15_000);
+    fireEntry(video, false, 0); // scrolled past at t=15000 (1s more watched)
+
+    // 1s before pause + 1s after resume = 2000ms; the 3s paused is excluded.
+    expect(onWatched).toHaveBeenCalledWith(video, 2000);
+    vi.useRealTimers();
+  });
+
+  test('counts again after the element is reused for a new reel (src change)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+
+    const onWatched = vi.fn();
+    const detector = createReelDetector(onWatched, vi.fn());
+
+    const video = makeVideo('blob:reel-1');
+    const root = { querySelectorAll: () => [video] };
+    detector.scanAndObserve(root);
+
+    fireEntry(video, true, 0.9); // reel-1 visible
+    vi.setSystemTime(2000);
+    fireEntry(video, false, 0); // reel-1 counted
+    expect(onWatched).toHaveBeenCalledTimes(1);
+
+    // Instagram reuses the element for a different reel.
+    video.currentSrc = 'blob:reel-2';
+    detector.scanAndObserve(root); // detects the src change, resets recorded
+
+    vi.setSystemTime(3000);
+    fireEntry(video, true, 0.9); // reel-2 visible
+    vi.setSystemTime(5000);
+    fireEntry(video, false, 0); // reel-2 counted (would be skipped without the reset)
+    expect(onWatched).toHaveBeenCalledTimes(2);
+
     vi.useRealTimers();
   });
 });
