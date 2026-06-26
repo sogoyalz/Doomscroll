@@ -1,6 +1,7 @@
 // Popup entry ("the face" — quick glance dashboard): reads storage, renders stats.
 
 import { getAll } from '../lib/storage.js';
+import { toCSV, downloadCSV } from '../lib/csv.js';
 import { buildDashboard, type Dashboard, type TimeRange } from '../lib/stats.js';
 import { MESSAGE_TYPES } from '../lib/types.js';
 import type { Mood, MoodBucket, ReelRecord } from '../lib/types.js';
@@ -76,9 +77,10 @@ function renderTypeBars(container: HTMLElement, byType: Dashboard['byType']) {
     .map(({ mood, count }) => {
       const pct = Math.round((count / maxCount) * 100);
       const color = TYPE_COLORS[mood] || '#6b6b6b';
+      const label = escapeHtml(MOOD_LABELS[mood] || mood);
       return `
         <li>
-          <span class="bar-label">${MOOD_LABELS[mood] || mood}</span>
+          <span class="bar-label">${label}</span>
           <span class="bar-track"><span class="bar-fill" style="width:${pct}%;background:${color}"></span></span>
           <span class="bar-count">${count}</span>
         </li>`;
@@ -182,7 +184,6 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('No data to export');
       return;
     }
-    const escapeCSV = (v: unknown) => '"' + (v ?? '').toString().replace(/"/g, '""') + '"';
     const header = [
       'src',
       'watchedMs',
@@ -192,27 +193,18 @@ document.addEventListener('DOMContentLoaded', () => {
       'moodTerms',
       'caption',
       'contextSample',
-    ].join(',');
-    const lines = records.map((r) =>
-      [
-        escapeCSV(r.src),
-        r.watchedMs ?? '',
-        r.ts ?? '',
-        escapeCSV(r.mood ?? 'undetectable'),
-        r.moodScore ?? '',
-        escapeCSV((r.moodTerms || []).join(' ')),
-        escapeCSV(r.caption ?? ''),
-        escapeCSV(r.contextSample ?? ''),
-      ].join(','),
-    );
-    const csv = [header, ...lines].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'doomscroll_data.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    ];
+    const rows = records.map((r) => [
+      r.src ?? '',
+      r.watchedMs ?? '',
+      r.ts ?? '',
+      r.mood ?? 'undetectable',
+      r.moodScore ?? '',
+      (r.moodTerms || []).join(' '),
+      r.caption ?? '',
+      r.contextSample ?? '',
+    ]);
+    downloadCSV(toCSV(header, rows), 'doomscroll_data.csv');
   });
 
   refresh();

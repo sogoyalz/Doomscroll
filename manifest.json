@@ -4,7 +4,7 @@
   "short_name": "Doomscroll",
   "version": "6.0",
   "description": "Track Instagram Reels (count viewed reels, mood classification and charts).",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage"],
   "host_permissions": ["*://www.instagram.com/*", "*://instagram.com/*", "*://m.instagram.com/*"],
   "icons": {
     "16": "assets/icons/icon16.png",

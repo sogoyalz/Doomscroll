@@ -102,3 +102,14 @@ button.danger:hover {
   margin: 0 0 10px;
   line-height: 1.4;
 }
+
+.llm-warning {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #7a3b00;
+  background: #fff4e5;
+  border: 1px solid #ffd8a8;
+  border-radius: 6px;
+}

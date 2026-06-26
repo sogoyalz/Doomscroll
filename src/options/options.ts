@@ -6,6 +6,7 @@
 // classification requests relayed from the background worker while open.
 
 import { getAll, set, clearAll } from '../lib/storage.js';
+import { toCSV, downloadCSV } from '../lib/csv.js';
 import { MESSAGE_TYPES } from '../lib/types.js';
 import type { Settings } from '../lib/types.js';
 
@@ -99,35 +100,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       alert('No data to export');
       return;
     }
-    const escapeCSV = (v: unknown) => '"' + (v ?? '').toString().replace(/"/g, '""') + '"';
-    const header = [
-      'src',
-      'watchedMs',
-      'ts',
-      'mood',
-      'moodScore',
-      'moodTerms',
-      'contextSample',
-    ].join(',');
-    const lines = records.map((r) =>
-      [
-        escapeCSV(r.src),
-        r.watchedMs ?? '',
-        r.ts ?? '',
-        escapeCSV(r.mood ?? 'undetectable'),
-        r.moodScore ?? '',
-        escapeCSV((r.moodTerms || []).join(' ')),
-        escapeCSV(r.contextSample ?? ''),
-      ].join(','),
-    );
-    const csv = [header, ...lines].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'doomscroll_data.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+    const header = ['src', 'watchedMs', 'ts', 'mood', 'moodScore', 'moodTerms', 'contextSample'];
+    const rows = records.map((r) => [
+      r.src ?? '',
+      r.watchedMs ?? '',
+      r.ts ?? '',
+      r.mood ?? 'undetectable',
+      r.moodScore ?? '',
+      (r.moodTerms || []).join(' '),
+      r.contextSample ?? '',
+    ]);
+    downloadCSV(toCSV(header, rows), 'doomscroll_data.csv');
   });
 
   clearBtn.addEventListener('click', async () => {
