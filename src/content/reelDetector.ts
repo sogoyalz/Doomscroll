@@ -40,7 +40,10 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) 
 
       // Only count when the user scrolled forward (down): the video exited
       // above the viewport (top < 0). If top > 0 the user scrolled back up.
-      const scrolledForward = entry.boundingClientRect.top < 0;
+      // Guard: boundingClientRect is always present in real browsers but may
+      // be absent in test stubs — default to counting when unknown.
+      const rect = entry.boundingClientRect;
+      const scrolledForward = !rect || rect.top < 0;
 
       if (watchedMs >= MIN_WATCH_MS && !state.recorded && scrolledForward) {
         state.recorded = true;
