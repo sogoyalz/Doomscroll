@@ -8,12 +8,19 @@ export const normalizeText = (t) => (t || '').toLowerCase().replace(/\s+/g, ' ')
 
 export function extractContextText(video) {
   try {
-    const article = video.closest('article, div[role="dialog"], div[role="presentation"]') || video.parentElement || document.body;
+    const article =
+      video.closest('article, div[role="dialog"], div[role="presentation"]') ||
+      video.parentElement ||
+      document.body;
 
     const candidates = [];
     const selectors = [
-      'h1', 'h2', 'h3', 'figcaption',
-      'span:not([role])', 'div:not([role])',
+      'h1',
+      'h2',
+      'h3',
+      'figcaption',
+      'span:not([role])',
+      'div:not([role])',
       'a[href]:not([role="button"])',
     ];
     for (const sel of selectors) {
@@ -45,13 +52,27 @@ export function extractContextText(video) {
   }
 }
 
+// Short human-readable title for display (e.g. the "Recent" list), distinct
+// from the longer contextText used for mood classification.
+export function extractCaption(contextText, maxLen = 80) {
+  const text = (contextText || '').trim();
+  if (!text) return '';
+  if (text.length <= maxLen) return text;
+  const truncated = text.slice(0, maxLen);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return (lastSpace > 20 ? truncated.slice(0, lastSpace) : truncated) + '…';
+}
+
 export function isLikelyReel(video) {
   try {
     if (!video) return false;
     if (location.pathname && location.pathname.startsWith('/reels')) return true;
     const src = (video.currentSrc || video.src || '').toLowerCase();
     if (src.includes('/reel') || src.includes('/reels') || src.includes('/video/')) return true;
-    if (video.closest('a[href*="/reel/"], a[href*="/reels/"], a[href*="/sound/"], a[href*="/audio/"]')) return true;
+    if (
+      video.closest('a[href*="/reel/"], a[href*="/reels/"], a[href*="/sound/"], a[href*="/audio/"]')
+    )
+      return true;
     if (video.closest('article, div[role="dialog"], div[role="presentation"]')) return true;
   } catch {
     // ignore

@@ -36,7 +36,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       },
     });
     saveStatus.textContent = 'Saved.';
-    setTimeout(() => { saveStatus.textContent = ''; }, 2000);
+    setTimeout(() => {
+      saveStatus.textContent = '';
+    }, 2000);
   });
 
   exportBtn.addEventListener('click', async () => {
@@ -46,12 +48,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     const escapeCSV = (v) => '"' + (v ?? '').toString().replace(/"/g, '""') + '"';
-    const header = ['src', 'watchedMs', 'ts', 'mood', 'moodScore', 'moodTerms', 'contextSample'].join(',');
-    const lines = records.map((r) => [
-      escapeCSV(r.src), r.watchedMs ?? '', r.ts ?? '',
-      escapeCSV(r.mood ?? 'undetectable'), r.moodScore ?? '',
-      escapeCSV((r.moodTerms || []).join(' ')), escapeCSV(r.contextSample ?? ''),
-    ].join(','));
+    const header = [
+      'src',
+      'watchedMs',
+      'ts',
+      'mood',
+      'moodScore',
+      'moodTerms',
+      'contextSample',
+    ].join(',');
+    const lines = records.map((r) =>
+      [
+        escapeCSV(r.src),
+        r.watchedMs ?? '',
+        r.ts ?? '',
+        escapeCSV(r.mood ?? 'undetectable'),
+        r.moodScore ?? '',
+        escapeCSV((r.moodTerms || []).join(' ')),
+        escapeCSV(r.contextSample ?? ''),
+      ].join(','),
+    );
     const csv = [header, ...lines].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);

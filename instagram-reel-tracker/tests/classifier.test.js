@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'vitest';
 import { classify } from '../src/classification/classifier.js';
 
 describe('classify', () => {

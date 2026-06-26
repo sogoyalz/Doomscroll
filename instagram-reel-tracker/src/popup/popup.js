@@ -1,160 +1,162 @@
 // Popup entry ("the face" — quick glance dashboard): reads storage, renders stats.
-// Pure Canvas pie (no Chart.js).
 
-import { getAll, clearAll } from '../lib/storage.js';
-import { MOOD_KEYS, buildSummary } from '../lib/stats.js';
+import { getAll } from '../lib/storage.js';
+import { buildDashboard } from '../lib/stats.js';
+import { MESSAGE_TYPES } from '../lib/messages.js';
 
-let pieCtx;
-const pieSize = 260; // css pixels
+const MOOD_LABELS = {
+  happy: 'Happy',
+  calm: 'Calm',
+  sad: 'Sad',
+  angry: 'Angry',
+  funny: 'Comedy',
+  romantic: 'Romantic',
+  motivational: 'Motivational',
+  fitness: 'Fitness',
+  educational: 'Tech',
+  music: 'Music',
+  food: 'Food',
+  gaming: 'Gaming',
+  undetectable: 'Undetectable',
+};
 
-const MOOD_LABELS = ['Happy', 'Calm', 'Sad', 'Angry', 'Funny', 'Romantic', 'Motivational', 'Fitness', 'Educational', 'Music', 'Food', 'Gaming', 'Undetectable'];
+const TYPE_COLORS = {
+  happy: '#f2b94e',
+  calm: '#3dd6a5',
+  sad: '#6e9eff',
+  angry: '#ff5b5b',
+  funny: '#ff7a45',
+  romantic: '#ff6e9c',
+  motivational: '#f2b94e',
+  fitness: '#3dd6a5',
+  educational: '#4e9eff',
+  music: '#b07aa1',
+  food: '#e0a13a',
+  gaming: '#9c9c9c',
+  undetectable: '#6b6b6b',
+};
 
-const COLORS = [
-  '#4e79a7', // Happy
-  '#f28e2b', // Calm
-  '#e15759', // Sad
-  '#76b7b2', // Angry
-  '#00bcd4', // Funny
-  '#b07aa1', // Romantic
-  '#59a14f', // Motivational
-  '#edc949', // Fitness
-  '#af7aa1', // Educational
-  '#ff9da7', // Music
-  '#9c755f', // Food
-  '#bab0ab', // Gaming
-  '#8a8d91', // Undetectable
-];
-const SLICE_BORDER = '#ffffff';
-const SLICE_BORDER_WIDTH = 2;
+const BUCKET_LABELS = { hype: 'Hype', chill: 'Chill', emotional: 'Emotional', neutral: 'Neutral' };
 
-const msToSec = (ms) => (ms / 1000).toFixed(1) + 's';
-const titleCase = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+const RANGE_LABELS = {
+  today: "Today you've doomscrolled",
+  week: "This week you've doomscrolled",
+  all: "Overall you've doomscrolled",
+};
 
-function setupHiDPICanvas(canvas, cssSize) {
-  const ratio = Math.max(1, window.devicePixelRatio || 1);
-  canvas.width = cssSize * ratio;
-  canvas.height = cssSize * ratio;
-  canvas.style.width = cssSize + 'px';
-  canvas.style.height = cssSize + 'px';
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  return ctx;
+function formatDuration(ms) {
+  const totalSeconds = Math.round(ms / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
 }
 
-function clearCanvas(ctx, size) {
-  ctx.clearRect(0, 0, size, size);
+function formatShort(ms) {
+  const totalSeconds = Math.round(ms / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  return `${Math.round(totalSeconds / 60)}m`;
 }
 
-function drawEmptyPie(ctx, size) {
-  const r = size / 2 - 6;
-  const cx = size / 2;
-  const cy = size / 2;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = '#f5f5f5';
-  ctx.fill();
-  ctx.strokeStyle = '#e5e5e5';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.fillStyle = '#777';
-  ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('No data', cx, cy);
+function renderTypeBars(container, byType) {
+  const maxCount = Math.max(1, ...byType.map((t) => t.count));
+  container.innerHTML = byType
+    .map(({ mood, count }) => {
+      const pct = Math.round((count / maxCount) * 100);
+      const color = TYPE_COLORS[mood] || '#6b6b6b';
+      return `
+        <li>
+          <span class="bar-label">${MOOD_LABELS[mood] || mood}</span>
+          <span class="bar-track"><span class="bar-fill" style="width:${pct}%;background:${color}"></span></span>
+          <span class="bar-count">${count}</span>
+        </li>`;
+    })
+    .join('');
 }
 
-function drawPie(ctx, values, colors, size) {
-  clearCanvas(ctx, size);
-  const total = values.reduce((a, b) => a + b, 0);
-  if (!total) {
-    drawEmptyPie(ctx, size);
+function renderMoodPills(container, moodBuckets) {
+  container.innerHTML = moodBuckets
+    .map(
+      ({ bucket, pct }) => `
+        <span class="pill pill-${bucket}">${BUCKET_LABELS[bucket]} · <span class="pct">${pct}%</span></span>`,
+    )
+    .join('');
+}
+
+function renderRecent(container, records) {
+  if (!records.length) {
+    container.innerHTML = '<li class="recent-empty">No reels tracked yet.</li>';
     return;
   }
-
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2 - 6;
-  let start = -Math.PI / 2;
-
-  values.forEach((v, i) => {
-    if (v <= 0) return;
-    const angle = (v / total) * Math.PI * 2;
-    const end = start + angle;
-
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, r, start, end);
-    ctx.closePath();
-    ctx.fillStyle = colors[i % colors.length];
-    ctx.fill();
-    ctx.lineWidth = SLICE_BORDER_WIDTH;
-    ctx.strokeStyle = SLICE_BORDER;
-    ctx.stroke();
-
-    start = end;
-  });
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(0,0,0,.08)';
-  ctx.stroke();
-}
-
-function renderLegend(legendEl, counts, total) {
-  const rows = MOOD_KEYS.map((k, idx) => {
-    const n = counts[k] || 0;
-    const pct = total ? Math.round((n / total) * 100) : 0;
-    const color = COLORS[idx % COLORS.length];
-    return `<li><span class="dot" style="background:${color}"></span>${MOOD_LABELS[idx]} — <strong>${n}</strong> (${pct}%)</li>`;
-  });
-  legendEl.innerHTML = rows.join('');
+  container.innerHTML = records
+    .map((r) => {
+      const color = TYPE_COLORS[r.mood] || '#6b6b6b';
+      const title = r.caption || r.contextSample || 'Untitled reel';
+      const seconds = Math.round(r.watchedMs / 1000);
+      return `
+        <li>
+          <span class="recent-thumb" style="color:${color}"></span>
+          <span class="recent-info">
+            <div class="recent-title">${title}</div>
+            <div class="recent-meta">${seconds}s</div>
+          </span>
+          <span class="recent-badge" style="background:${color}22;color:${color}">${MOOD_LABELS[r.mood] || r.mood}</span>
+        </li>`;
+    })
+    .join('');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const totalEl = document.getElementById('total');
-  const last1mEl = document.getElementById('last1m');
-  const last1hEl = document.getElementById('last1h');
-  const last24El = document.getElementById('last24');
-  const avgEl = document.getElementById('avg');
-  const topMoodEl = document.getElementById('topMood');
-
-  const refreshBtn = document.getElementById('refresh');
+  const headlineLabel = document.getElementById('headlineLabel');
+  const headlineValue = document.getElementById('headlineValue');
+  const totalReelsEl = document.getElementById('totalReels');
+  const longestBingeEl = document.getElementById('longestBinge');
+  const avgPerReelEl = document.getElementById('avgPerReel');
+  const typeBarsEl = document.getElementById('typeBars');
+  const moodPillsEl = document.getElementById('moodPills');
+  const recentListEl = document.getElementById('recentList');
   const exportBtn = document.getElementById('export');
-  const clearBtn = document.getElementById('clear');
+  const rangeTabs = document.getElementById('rangeTabs');
 
-  const canvas = document.getElementById('moodChart');
-  const legendEl = document.getElementById('moodLegend');
+  let currentRange = 'today';
 
-  pieCtx = setupHiDPICanvas(canvas, pieSize);
+  function render(dashboard) {
+    headlineLabel.textContent = RANGE_LABELS[dashboard.range];
+    headlineValue.textContent = formatDuration(dashboard.totalWatchedMs);
+    totalReelsEl.textContent = dashboard.totalReels;
+    longestBingeEl.textContent = dashboard.longestBingeMs
+      ? formatShort(dashboard.longestBingeMs)
+      : '0m';
+    avgPerReelEl.textContent = dashboard.avgWatchMs ? formatShort(dashboard.avgWatchMs) : '0s';
 
-  function updateUIFromRecords(rawRecords) {
-    const summary = buildSummary(rawRecords);
-
-    totalEl.textContent = summary.total;
-    last1mEl.textContent = summary.last1m;
-    last1hEl.textContent = summary.last1h;
-    last24El.textContent = summary.last24h;
-    avgEl.textContent = summary.meanWatchMs ? msToSec(summary.meanWatchMs) : '—';
-    avgEl.title = `Mean: ${summary.meanWatchMs ? msToSec(summary.meanWatchMs) : '—'}\nMedian: ${summary.medianWatchMs ? msToSec(summary.medianWatchMs) : '—'}`;
-    topMoodEl.textContent = summary.total ? `Top mood: ${titleCase(summary.topMood)} (${summary.topMoodPct}%)` : '';
-
-    const data = MOOD_KEYS.map((m) => summary.moodCounts[m] || 0);
-    drawPie(pieCtx, data, COLORS, pieSize);
-    renderLegend(legendEl, summary.moodCounts, summary.total);
+    renderTypeBars(typeBarsEl, dashboard.byType);
+    renderMoodPills(moodPillsEl, dashboard.moodBuckets);
+    renderRecent(recentListEl, dashboard.recent);
   }
 
   async function refresh() {
     const data = await getAll({ reel_records: [] });
-    updateUIFromRecords(data.reel_records || []);
+    const dashboard = buildDashboard(data.reel_records || [], currentRange);
+    render(dashboard);
   }
 
-  refreshBtn.addEventListener('click', refresh);
+  rangeTabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('.range-tab');
+    if (!btn) return;
+    currentRange = btn.dataset.range;
+    rangeTabs.querySelectorAll('.range-tab').forEach((t) => {
+      t.setAttribute('aria-selected', String(t === btn));
+    });
+    refresh();
+  });
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && (changes.reel_records || changes.reelCount)) refresh();
   });
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.type === 'REEL_WATCHED') refresh();
+    if (msg?.type === MESSAGE_TYPES.REEL_WATCHED) refresh();
   });
 
   exportBtn.addEventListener('click', async () => {
@@ -165,12 +167,28 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     const escapeCSV = (v) => '"' + (v ?? '').toString().replace(/"/g, '""') + '"';
-    const header = ['src', 'watchedMs', 'ts', 'mood', 'moodScore', 'moodTerms', 'contextSample'].join(',');
-    const lines = records.map((r) => [
-      escapeCSV(r.src), r.watchedMs ?? '', r.ts ?? '',
-      escapeCSV(r.mood ?? 'undetectable'), r.moodScore ?? '',
-      escapeCSV((r.moodTerms || []).join(' ')), escapeCSV(r.contextSample ?? ''),
-    ].join(','));
+    const header = [
+      'src',
+      'watchedMs',
+      'ts',
+      'mood',
+      'moodScore',
+      'moodTerms',
+      'caption',
+      'contextSample',
+    ].join(',');
+    const lines = records.map((r) =>
+      [
+        escapeCSV(r.src),
+        r.watchedMs ?? '',
+        r.ts ?? '',
+        escapeCSV(r.mood ?? 'undetectable'),
+        r.moodScore ?? '',
+        escapeCSV((r.moodTerms || []).join(' ')),
+        escapeCSV(r.caption ?? ''),
+        escapeCSV(r.contextSample ?? ''),
+      ].join(','),
+    );
     const csv = [header, ...lines].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -179,12 +197,6 @@ document.addEventListener('DOMContentLoaded', () => {
     a.download = 'insta_reel_data.csv';
     a.click();
     URL.revokeObjectURL(url);
-  });
-
-  clearBtn.addEventListener('click', async () => {
-    if (!confirm('Clear all stored reel data?')) return;
-    await clearAll();
-    refresh();
   });
 
   refresh();

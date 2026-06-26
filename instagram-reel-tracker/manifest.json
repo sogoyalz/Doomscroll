@@ -5,11 +5,7 @@
   "version": "6.0",
   "description": "Track Instagram Reels (count viewed reels, mood classification and charts).",
   "permissions": ["storage", "activeTab", "scripting"],
-  "host_permissions": [
-    "*://www.instagram.com/*",
-    "*://instagram.com/*",
-    "*://m.instagram.com/*"
-  ],
+  "host_permissions": ["*://www.instagram.com/*", "*://instagram.com/*", "*://m.instagram.com/*"],
   "icons": {
     "16": "assets/icons/icon16.png",
     "48": "assets/icons/icon48.png",
@@ -22,17 +18,16 @@
   "options_page": "src/options/options.html",
   "content_scripts": [
     {
-      "matches": [
-        "*://www.instagram.com/*",
-        "*://instagram.com/*",
-        "*://m.instagram.com/*"
-      ],
+      "matches": ["*://www.instagram.com/*", "*://instagram.com/*", "*://m.instagram.com/*"],
       "js": ["dist/content.bundle.js"],
       "run_at": "document_idle"
     }
   ],
   "background": { "service_worker": "dist/service-worker.bundle.js" },
   "web_accessible_resources": [
-    { "resources": ["assets/icons/icon128.png"], "matches": ["*://*.instagram.com/*", "*://instagram.com/*"] }
+    {
+      "resources": ["assets/icons/icon128.png"],
+      "matches": ["*://*.instagram.com/*", "*://instagram.com/*"]
+    }
   ]
 }

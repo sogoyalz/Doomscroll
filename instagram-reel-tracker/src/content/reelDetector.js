@@ -6,7 +6,7 @@ export const VISIBILITY_THRESHOLD = 0.65;
 export const MIN_WATCH_MS = 1000;
 const CLAMP_MAX_MS = 10 * 60 * 1000; // guard against tab-stuck-visible durations
 
-export function createReelDetector(onWatched) {
+export function createReelDetector(onWatched, onVisible) {
   const videoState = new WeakMap();
   const now = () => Date.now();
 
@@ -23,8 +23,9 @@ export function createReelDetector(onWatched) {
     if (isVisible && !state.watching) {
       state.watching = true;
       state.start = now();
+      if (onVisible) onVisible(video);
     } else if (!isVisible && state.watching) {
-      const watchedMs = now() - (state.start || now());
+      const watchedMs = now() - (state.start ?? now());
       state.watching = false;
       state.start = null;
 

@@ -1,47 +1,66 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>InstaReel Tracker</title>
-  <link rel="stylesheet" href="popup.css">
-</head>
-<body>
-  <header class="header"><h1>InstaReel Tracker</h1></header>
-
-  <section id="summary" class="summary">
-    <div class="stat"><span class="label">Total reels viewed:</span> <strong id="total">—</strong></div>
-    <div class="stat"><span class="label">Last 1 min:</span> <strong id="last1m">—</strong></div>
-    <div class="stat"><span class="label">Last 1 hour:</span> <strong id="last1h">—</strong></div>
-    <div class="stat"><span class="label">Last 24h:</span> <strong id="last24">—</strong></div>
-    <div class="stat"><span class="label">Avg watch time:</span> <strong id="avg">—</strong></div>
-  </section>
-
-  <section class="controls" id="controls">
-    <button id="refresh">Refresh</button>
-    <button id="export">Export CSV</button>
-    <button id="clear" class="danger">Clear</button>
-    <a id="openOptions" href="../options/options.html" target="_blank">Settings</a>
-  </section>
-
-  <section class="card">
-    <div class="row">
-      <h2 class="h2">Mood distribution</h2>
-      <small class="muted" id="topMood"></small>
-    </div>
-
-    <div class="chart-grid">
-      <div class="chart-area">
-        <canvas id="moodChart" width="260" height="260" aria-label="Mood chart" role="img"></canvas>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Reel Tracker</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="brand">
+        <span class="brand-icon"></span>
+        <h1>Reel Tracker</h1>
       </div>
-      <ul id="moodLegend" class="legend" aria-label="Mood legend"></ul>
-    </div>
-  </section>
+      <div class="range-tabs" id="rangeTabs" role="tablist" aria-label="Time range">
+        <button class="range-tab" data-range="today" role="tab" aria-selected="true">Today</button>
+        <button class="range-tab" data-range="week" role="tab" aria-selected="false">Week</button>
+        <button class="range-tab" data-range="all" role="tab" aria-selected="false">All</button>
+      </div>
+    </header>
 
-  <footer class="footnote">
-    <small class="muted">Records are stored locally in this browser.</small>
-  </footer>
+    <section class="headline">
+      <p class="headline-label" id="headlineLabel">Today you've doomscrolled</p>
+      <p class="headline-value" id="headlineValue">0m</p>
+      <div class="headline-stats">
+        <div class="stat">
+          <strong id="totalReels">0</strong>
+          <span>reels</span>
+        </div>
+        <div class="stat">
+          <strong id="longestBinge">0m</strong>
+          <span>longest binge</span>
+        </div>
+        <div class="stat">
+          <strong id="avgPerReel">0s</strong>
+          <span>avg / reel</span>
+        </div>
+      </div>
+    </section>
 
-  <script src="popup.bundle.js"></script>
-</body>
+    <section class="card">
+      <h2 class="section-title">By type</h2>
+      <ul class="bars" id="typeBars"></ul>
+    </section>
+
+    <section class="card">
+      <h2 class="section-title">Mood</h2>
+      <div class="pills" id="moodPills"></div>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <h2 class="section-title">Recent</h2>
+        <button class="link-btn" id="seeAll">See all</button>
+      </div>
+      <ul class="recent-list" id="recentList"></ul>
+    </section>
+
+    <footer class="footer">
+      <button id="export">Export</button>
+      <a id="openOptions" href="../options/options.html" target="_blank">Settings</a>
+    </footer>
+
+    <script src="popup.bundle.js"></script>
+  </body>
 </html>

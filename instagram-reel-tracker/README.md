@@ -8,8 +8,8 @@ dashboard with counts, watch-time stats, and a mood breakdown.
 
 Reels are an infinite, low-friction feed — easy to lose track of how much
 you watch and what kind of content keeps pulling you back in. This extension
-answers two questions locally, with no server and no tracking: *how much am
-I watching*, and *what mood/category dominates*.
+answers two questions locally, with no server and no tracking: _how much am
+I watching_, and _what mood/category dominates_.
 
 ## How it works
 

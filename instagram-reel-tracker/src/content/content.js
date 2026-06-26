@@ -3,27 +3,34 @@
 // and reports finished views to the background service worker.
 
 import { createReelDetector } from './reelDetector.js';
-import { extractContextText, isLikelyReel } from './domScraper.js';
-import { classify } from '../classification/classifier.js';
+import { extractContextText, extractCaption, isLikelyReel } from './domScraper.js';
 import { MESSAGE_TYPES } from '../lib/messages.js';
 
 (() => {
   console.log('InstaReel Tracker content script starting');
 
+  // Caption text is captured while the reel is still on screen (onVisible),
+  // not after it scrolls away (onWatched) — by then Instagram's virtualized
+  // feed may have already swapped the DOM to the next reel.
+  const contextTextByVideo = new WeakMap();
+
+  function handleVisible(video) {
+    if (!isLikelyReel(video)) return;
+    contextTextByVideo.set(video, extractContextText(video));
+  }
+
   function handleWatched(video, watchedMs) {
     if (!isLikelyReel(video)) return;
 
-    const contextText = extractContextText(video);
-    const { mood, score, matched } = classify(contextText);
+    const contextText = contextTextByVideo.get(video) ?? extractContextText(video);
 
     const record = {
       src: video.currentSrc || video.src || '',
       watchedMs,
       ts: Date.now(),
-      mood,
-      moodScore: score,
-      moodTerms: matched[mood] || [],
+      contextText,
       contextSample: contextText.slice(0, 200),
+      caption: extractCaption(contextText),
     };
 
     try {
@@ -33,7 +40,7 @@ import { MESSAGE_TYPES } from '../lib/messages.js';
     }
   }
 
-  const detector = createReelDetector(handleWatched);
+  const detector = createReelDetector(handleWatched, handleVisible);
 
   detector.scanAndObserve();
   const mo = new MutationObserver(() => detector.scanAndObserve());

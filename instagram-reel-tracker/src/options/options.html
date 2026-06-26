@@ -1,42 +1,48 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>InstaReel Tracker — Settings</title>
-  <link rel="stylesheet" href="options.css">
-</head>
-<body>
-  <header class="header"><h1>Settings</h1></header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>InstaReel Tracker — Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <header class="header"><h1>Settings</h1></header>
 
-  <section class="card">
-    <h2 class="h2">Classification</h2>
-    <label class="toggle-row">
-      <input type="checkbox" id="useLLM" />
-      <span>Use LLM-based mood classification (requires API key)</span>
-    </label>
-    <div id="llmFields" class="llm-fields" hidden>
-      <label class="field">
-        <span>API endpoint</span>
-        <input type="text" id="llmEndpoint" placeholder="https://api.example.com/classify" />
+    <section class="card">
+      <h2 class="h2">Classification</h2>
+      <label class="toggle-row">
+        <input type="checkbox" id="useLLM" />
+        <span
+          >Use Claude for mood classification (more accurate, requires an Anthropic API key)</span
+        >
       </label>
-      <label class="field">
-        <span>API key</span>
-        <input type="password" id="llmApiKey" placeholder="sk-..." />
-      </label>
-    </div>
-    <button id="save">Save</button>
-    <span id="saveStatus" class="muted"></span>
-  </section>
+      <div id="llmFields" class="llm-fields" hidden>
+        <label class="field">
+          <span>Anthropic API key</span>
+          <input type="password" id="llmApiKey" placeholder="sk-ant-..." />
+        </label>
+        <label class="field">
+          <span>API endpoint (advanced — leave blank to use Anthropic's API)</span>
+          <input type="text" id="llmEndpoint" placeholder="https://api.anthropic.com/v1/messages" />
+        </label>
+      </div>
+      <p class="muted llm-note">
+        Your key is stored locally in this browser and sent directly to Anthropic to classify each
+        reel's caption — it is never shared with anyone else.
+      </p>
+      <button id="save">Save</button>
+      <span id="saveStatus" class="muted"></span>
+    </section>
 
-  <section class="card">
-    <h2 class="h2">Data</h2>
-    <div class="controls">
-      <button id="export">Export CSV</button>
-      <button id="clear" class="danger">Clear all data</button>
-    </div>
-  </section>
+    <section class="card">
+      <h2 class="h2">Data</h2>
+      <div class="controls">
+        <button id="export">Export CSV</button>
+        <button id="clear" class="danger">Clear all data</button>
+      </div>
+    </section>
 
-  <script src="options.bundle.js"></script>
-</body>
+    <script src="options.bundle.js"></script>
+  </body>
 </html>
