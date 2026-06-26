@@ -56,6 +56,12 @@ declare global {
   // Heartbeat: rescan every 2s as an SPA safety net (IG navigates without full reloads).
   const heartbeat = setInterval(() => detector.scanAndObserve(), 2000);
 
+  // Exclude time spent with the tab hidden from watch-time totals.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) detector.onHide();
+    else detector.onShow();
+  });
+
   window.addEventListener('beforeunload', () => {
     detector.disconnect();
     mo.disconnect();

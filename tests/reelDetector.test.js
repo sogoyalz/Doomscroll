@@ -135,4 +135,28 @@ describe('createReelDetector', () => {
     expect(onWatched).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
+
+  test('onHide/onShow excludes tab-hidden time from watch duration', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+
+    const onWatched = vi.fn();
+    const detector = createReelDetector(onWatched, vi.fn());
+
+    const video = {};
+    fireEntry(video, true, 0.9);         // starts watching at t=10000
+
+    vi.setSystemTime(11_000);
+    detector.onHide();                    // tab hidden at t=11000 (1s of real watch)
+
+    vi.setSystemTime(13_000);
+    detector.onShow();                    // tab visible again at t=13000 (2s hidden)
+
+    vi.setSystemTime(14_500);
+    fireEntry(video, false, 0);           // scrolled past at t=14500
+
+    // Should count 1s (before hide) + 1.5s (after show) = 2500ms, not 4500ms
+    expect(onWatched).toHaveBeenCalledWith(video, 2500);
+    vi.useRealTimers();
+  });
 });

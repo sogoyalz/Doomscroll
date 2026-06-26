@@ -17,6 +17,9 @@ export type OnVisible = (video: HTMLVideoElement) => void;
 
 export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) {
   const videoState = new WeakMap<HTMLVideoElement, VideoState>();
+  // Tracks videos currently being timed so we can pause/resume on tab hide/show.
+  const watchingSet = new Set<HTMLVideoElement>();
+  let hiddenAt: number | null = null;
   const now = () => Date.now();
 
   function handleEntry(entry: IntersectionObserverEntry) {
@@ -32,11 +35,13 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) 
     if (isVisible && !state.watching) {
       state.watching = true;
       state.start = now();
+      watchingSet.add(video);
       if (onVisible) onVisible(video);
     } else if (!isVisible && state.watching) {
       const watchedMs = now() - (state.start ?? now());
       state.watching = false;
       state.start = null;
+      watchingSet.delete(video);
 
       // Only count when the user scrolled forward (down): the video exited
       // above the viewport (top < 0). If top > 0 the user scrolled back up.
@@ -63,6 +68,12 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) 
       if (!videoState.has(video)) {
         videoState.set(video, { watching: false, start: null, recorded: false });
         observer.observe(video);
+        // Instagram reuses video elements for different reels. When the src
+        // changes, reset state so the new reel can be tracked independently.
+        video.addEventListener('loadstart', () => {
+          watchingSet.delete(video);
+          videoState.set(video, { watching: false, start: null, recorded: false });
+        });
       }
     } catch {
       // ignore
@@ -73,9 +84,31 @@ export function createReelDetector(onWatched: OnWatched, onVisible?: OnVisible) 
     root.querySelectorAll('video').forEach(observeVideo);
   }
 
-  function disconnect() {
-    observer.disconnect();
+  // Call when the tab becomes hidden. Stores the hide time so onShow() can
+  // subtract it from each active timer, excluding hidden time from watch totals.
+  function onHide() {
+    hiddenAt = now();
   }
 
-  return { scanAndObserve, disconnect, _videoState: videoState };
+  // Call when the tab becomes visible again. Shifts every active start time
+  // forward by the time spent hidden so that gap is not counted as watch time.
+  function onShow() {
+    if (hiddenAt === null) return;
+    const hiddenMs = now() - hiddenAt;
+    hiddenAt = null;
+    for (const video of watchingSet) {
+      const state = videoState.get(video);
+      if (state?.start !== null && state?.start !== undefined) {
+        state.start += hiddenMs;
+        videoState.set(video, state);
+      }
+    }
+  }
+
+  function disconnect() {
+    observer.disconnect();
+    watchingSet.clear();
+  }
+
+  return { scanAndObserve, disconnect, onHide, onShow, _videoState: videoState };
 }
