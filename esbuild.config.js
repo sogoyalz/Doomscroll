@@ -3,15 +3,15 @@ import * as esbuild from 'esbuild';
 const watch = process.argv.includes('--watch');
 
 const entryPoints = {
-  'content.bundle': 'src/content/content.js',
-  'service-worker.bundle': 'src/background/service-worker.js',
+  'content.bundle': 'src/content/content.ts',
+  'service-worker.bundle': 'src/background/service-worker.ts',
 };
 
-// popup.js / options.js are loaded as page scripts (not MV3 service workers),
+// popup.ts / options.ts are loaded as page scripts (not MV3 service workers),
 // so they bundle into their own folders next to their html.
 const pageEntryPoints = {
-  'src/popup/popup.bundle': 'src/popup/popup.js',
-  'src/options/options.bundle': 'src/options/options.js',
+  'src/popup/popup.bundle': 'src/popup/popup.ts',
+  'src/options/options.bundle': 'src/options/options.ts',
 };
 
 const sharedOptions = {
@@ -19,6 +19,7 @@ const sharedOptions = {
   format: 'iife',
   target: 'chrome110',
   sourcemap: true,
+  minify: true,
 };
 
 async function build() {

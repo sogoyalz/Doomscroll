@@ -21,7 +21,7 @@ describe('createReelDetector', () => {
     FakeIntersectionObserver.instances = [];
     global.IntersectionObserver = FakeIntersectionObserver;
     vi.resetModules();
-    ({ createReelDetector } = await import('../src/content/reelDetector.js'));
+    ({ createReelDetector } = await import('../src/content/reelDetector.ts'));
   });
 
   afterEach(() => {

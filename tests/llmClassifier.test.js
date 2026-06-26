@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { classify } from '../src/classification/llmClassifier.js';
+import { classify } from '../src/classification/llmClassifier.ts';
 
 describe('llmClassifier.classify', () => {
   const originalFetch = global.fetch;

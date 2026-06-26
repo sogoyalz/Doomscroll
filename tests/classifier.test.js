@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { classify } from '../src/classification/classifier.js';
+import { classify } from '../src/classification/classifier.ts';
 
 describe('classify', () => {
   test('returns undetectable for empty text', () => {

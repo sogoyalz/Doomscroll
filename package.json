@@ -7,16 +7,20 @@
     "build": "node esbuild.config.js",
     "watch": "node esbuild.config.js --watch",
     "test": "vitest run",
+    "typecheck": "tsc",
     "lint": "eslint src tests",
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "chart.js": "^4.5.0"
   },
   "devDependencies": {
+    "@types/chrome": "^0.2.0",
     "esbuild": "^0.23.0",
     "eslint": "^8.57.0",
     "prettier": "^3.3.0",
+    "typescript": "^6.0.3",
     "vitest": "^2.1.0"
   }
 }

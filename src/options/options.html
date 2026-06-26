@@ -31,6 +31,16 @@
         Your key is stored locally in this browser and sent directly to Anthropic to classify each
         reel's caption — it is never shared with anyone else.
       </p>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="useMLClassifier" />
+        <span
+          >Use on-device AI classification (runs locally in this page, no API key, more accurate
+          than keyword matching — only works while this Settings page is open)</span
+        >
+      </label>
+      <p class="muted" id="mlStatus"></p>
+
       <button id="save">Save</button>
       <span id="saveStatus" class="muted"></span>
     </section>

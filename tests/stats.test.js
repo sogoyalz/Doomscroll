@@ -14,7 +14,7 @@ import {
   recentRecords,
   buildSummary,
   buildDashboard,
-} from '../src/lib/stats.js';
+} from '../src/lib/stats.ts';
 
 describe('sanitizeRecords', () => {
   test('coerces numeric fields and defaults mood', () => {

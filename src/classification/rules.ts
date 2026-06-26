@@ -1,0 +1,272 @@
+// Keyword/emoji tables for the heuristic (v1) classifier.
+
+import type { MoodBucket } from '../lib/types.js';
+
+interface MoodDef {
+  words: string[];
+  emojis: string[];
+}
+
+export const MOOD_DEFS: Record<string, MoodDef> = {
+  happy: {
+    words: [
+      'happy',
+      'joy',
+      'smile',
+      'celebrate',
+      'cute',
+      'adorable',
+      'delight',
+      'glad',
+      'cheerful',
+      'positive',
+    ],
+    emojis: ['😊', '😁', '😃', '😄', '😇', '🌞', '🥰', '✨', '🌈', '🙂'],
+  },
+  calm: {
+    words: [
+      'relax',
+      'calm',
+      'chill',
+      'soothing',
+      'lofi',
+      'aesthetic',
+      'nature',
+      'rain',
+      'meditation',
+      'breathe',
+      'ocean',
+      'forest',
+      'peace',
+      'serene',
+    ],
+    emojis: ['😌', '🌿', '🌊', '🌧️', '🧘', '🕊️', '🌅', '🌙', '☁️', '🍵', '🪷'],
+  },
+  sad: {
+    words: [
+      'sad',
+      'cry',
+      'tears',
+      'heartbroken',
+      'lonely',
+      'alone',
+      'breakup',
+      'depress',
+      'pain',
+      'miss you',
+      'grief',
+      'lost',
+      'down',
+    ],
+    emojis: ['😭', '😢', '💔', '😞', '😔', '☹️', '😩', '😿', '🌧️', '🖤'],
+  },
+  angry: {
+    words: [
+      'angry',
+      'rage',
+      'drama',
+      'fight',
+      'exposed',
+      'rant',
+      'argument',
+      'furious',
+      'hate',
+      'triggered',
+      'annoyed',
+      'mad',
+    ],
+    emojis: ['🤬', '😡', '😠', '👿', '💢', '🔥', '😤', '🚫'],
+  },
+  funny: {
+    words: [
+      'funny',
+      'comedy',
+      'meme',
+      'prank',
+      'joke',
+      'troll',
+      'lol',
+      'lmao',
+      'rofl',
+      'humor',
+      'hilarious',
+      'haha',
+      'skit',
+      'bit',
+    ],
+    emojis: ['😂', '🤣', '😹', '😆', '😅', '🙃', '🤡', '😜', '😝'],
+  },
+  romantic: {
+    words: [
+      'love',
+      'romance',
+      'couple',
+      'date',
+      'kiss',
+      'crush',
+      'valentine',
+      'romantic',
+      'relationship',
+    ],
+    emojis: ['😘', '❤️', '💖', '💕', '😍', '💘', '💞', '💓', '💋', '🌹', '🥰'],
+  },
+  motivational: {
+    words: [
+      'motivation',
+      'inspire',
+      'discipline',
+      'mindset',
+      'productivity',
+      'you can do it',
+      'hustle',
+      'grind',
+      'success',
+      'focus',
+      'goal',
+      'never give up',
+    ],
+    emojis: ['💪', '🔥', '🚀', '🏆', '🙌', '🌟', '📈', '✨'],
+  },
+  fitness: {
+    words: [
+      'gym',
+      'workout',
+      'fitness',
+      'abs',
+      'cardio',
+      'pushup',
+      'deadlift',
+      'squat',
+      'transformation',
+      'calories',
+      'training',
+      'exercise',
+    ],
+    emojis: ['🏋️‍♂️', '🏋️‍♀️', '💪', '🤸', '🏃', '🚴', '🥗', '🥦', '🥚'],
+  },
+  educational: {
+    words: [
+      'tutorial',
+      'how to',
+      'guide',
+      'learn',
+      'tips',
+      'hack',
+      'study',
+      'coding',
+      'programming',
+      'python',
+      'math',
+      'engineering',
+      'facts',
+      'explained',
+      'lesson',
+    ],
+    emojis: ['📚', '🧠', '🔬', '📝', '💡', '💻', '📖', '✏️', '🧮', '🖥️'],
+  },
+  music: {
+    words: [
+      'song',
+      'lyrics',
+      'track',
+      'music',
+      'cover',
+      'guitar',
+      'piano',
+      'beat',
+      'sing',
+      'remix',
+    ],
+    emojis: ['🎵', '🎶', '🎤', '🎧', '🎼', '🎹', '🥁', '🎷', '🎺', '🎸', '🪕'],
+  },
+  food: {
+    words: [
+      'recipe',
+      'cook',
+      'kitchen',
+      'food',
+      'eat',
+      'delicious',
+      'tasty',
+      'restaurant',
+      'yummy',
+      'snack',
+      'dish',
+      'meal',
+    ],
+    emojis: ['🍔', '🍟', '🍕', '🥗', '🍲', '🍩', '🍪', '🍎', '🥑', '🍜', '🥘', '🍣'],
+  },
+  gaming: {
+    words: [
+      'game',
+      'gaming',
+      'gamer',
+      'pubg',
+      'fortnite',
+      'valorant',
+      'gta',
+      'minecraft',
+      'ranked',
+      'esports',
+      'play',
+      'controller',
+    ],
+    emojis: ['🎮', '🕹️', '💻', '⌨️', '🖱️', '🏆', '🔥'],
+  },
+};
+
+export const MOOD_ORDER = [
+  'happy',
+  'calm',
+  'sad',
+  'angry',
+  'funny',
+  'romantic',
+  'motivational',
+  'fitness',
+  'educational',
+  'music',
+  'food',
+  'gaming',
+] as const;
+
+export const WORD_WEIGHT = 1.4;
+export const EMOJI_WEIGHT = 1.0;
+
+// UI chrome/noise to strip out of scraped caption text before scoring.
+export const UI_NOISE = [
+  'like',
+  'comment',
+  'share',
+  'save',
+  'follow',
+  'following',
+  'reels',
+  'audio',
+  'view all comments',
+  'send message',
+  'suggested',
+  'more options',
+  'report',
+];
+
+// Coarser grouping of the 13 mood categories into 4 high-level moods, used
+// for the popup's "Mood" summary pills.
+export const MOOD_BUCKETS: Record<MoodBucket, string[]> = {
+  hype: ['funny', 'motivational', 'fitness', 'gaming'],
+  chill: ['calm', 'music', 'food', 'educational'],
+  emotional: ['happy', 'sad', 'angry', 'romantic'],
+  neutral: ['undetectable'],
+};
+
+export const MOOD_BUCKET_ORDER: MoodBucket[] = ['hype', 'chill', 'emotional', 'neutral'];
+
+const MOOD_TO_BUCKET: Record<string, MoodBucket> = Object.fromEntries(
+  Object.entries(MOOD_BUCKETS).flatMap(([bucket, moods]) =>
+    moods.map((m) => [m, bucket] as [string, MoodBucket]),
+  ),
+);
+
+export function bucketForMood(mood: string): MoodBucket {
+  return MOOD_TO_BUCKET[mood] || 'neutral';
+}
