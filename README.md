@@ -15,15 +15,17 @@ I watching_, and _what mood/category dominates_.
 
 1. **Content script** (`src/content/`) watches `<video>` elements on
    instagram.com with an `IntersectionObserver`. A reel only counts once it's
-   ≥65% visible for ≥1 second (`reelDetector.js`).
-2. Once a watch is confirmed, `domScraper.js` pulls nearby caption/hashtag
+   ≥65% visible for ≥1 second (`reelDetector.ts`). Crucially, it only records
+   a view when you scroll **forward** (down) past a reel — scrolling back up
+   does not count.
+2. Once a watch is confirmed, `domScraper.ts` pulls nearby caption/hashtag
    text off the DOM, filtering out UI chrome (buttons, "Like", "Comment", etc).
 3. That text is scored against keyword/emoji tables
-   (`src/classification/rules.js`) by `classifier.js` to produce a mood label
+   (`src/classification/rules.ts`) by `classifier.ts` to produce a mood label
    (happy, calm, sad, angry, funny, romantic, motivational, fitness,
    educational, music, food, gaming, or undetectable). The classifier is
    exposed as `classify(text)`, so it can be swapped for an LLM-backed
-   implementation (`llmClassifier.js`) via the options page without touching
+   implementation (`llmClassifier.ts`) via the options page without touching
    any call sites.
 4. The content script messages the **background service worker**
    (`src/background/`), which appends the record to `chrome.storage.local`.
@@ -54,7 +56,7 @@ the extension in `chrome://extensions` after each rebuild).
 ## Tests
 
 ```sh
-npm test    # Jest unit tests for classifier.js and stats.js
+npm test    # Vitest unit tests for classifier, stats, and reelDetector
 npm run lint
 ```
 
