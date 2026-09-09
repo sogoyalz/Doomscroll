@@ -5,7 +5,8 @@ and flags when the algorithm has locked onto one emotional register and is
 feeding it back faster than you'd consciously notice.
 
 Everything stays on your machine — no server, no account, no telemetry. The
-extension makes no network requests at all; see [PRIVACY.md](PRIVACY.md).
+extension makes no network requests at all; see the
+[public privacy policy](https://sogoyalz.github.io/Doomscroll/PRIVACY).
 
 Requires Chrome 111 or later (the shortcode bridge needs `"world": "MAIN"`
 content scripts). Runs only on `https://instagram.com`, and never on

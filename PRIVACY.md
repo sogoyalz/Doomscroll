@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** 8 August 2026
+**Last updated:** 9 September 2026
 
 Doomscroll is a Chrome extension that tracks which Instagram Reels you watch
 and flags when the feed is serving you a repetitive stream of similar content.

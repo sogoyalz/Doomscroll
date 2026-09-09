@@ -80,7 +80,7 @@ determine creditworthiness. All true; nothing is transmitted anywhere.
 | Icon | 128×128 PNG | have — `assets/icons/icon128.png` |
 | Screenshots | 1280×800 or 640×400, at least one, up to five | **TODO** |
 | Small promo tile | 440×280 | optional |
-| Privacy policy URL | publicly reachable | **TODO — see below** |
+| Privacy policy URL | publicly reachable | `https://sogoyalz.github.io/Doomscroll/PRIVACY` |
 
 Suggested screenshots, in order: the popup with a populated day; the category
 mix with a clear dominant category; the options detection log; the "why so
@@ -91,10 +91,10 @@ and fabricated screenshots are grounds for removal.
 
 ## Before submitting
 
-- [ ] Host `PRIVACY.md` at a public URL. Enabling GitHub Pages on the repo
-      gives you `https://sogoyalz.github.io/Doomscroll/PRIVACY` for free.
-- [ ] Bump `version` in `manifest.json` — `0.1.0` is not a release version.
-      It must increase on every subsequent upload.
+- [x] Host `PRIVACY.md` at a public URL:
+      `https://sogoyalz.github.io/Doomscroll/PRIVACY`.
+- [x] Set the release version in `manifest.json`. It must increase on every
+      subsequent upload.
 - [ ] `npm run package`, then upload `doomscroll-<version>.zip`.
 - [ ] Verify the built manifest declares no permission the code does not use.
       `npm run package` checks structure but not this — read it.

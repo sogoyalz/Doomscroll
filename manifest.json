@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Doomscroll",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Tracks which Instagram Reels you watch and flags when you're being shown a repetitive stream of similar content.",
   "minimum_chrome_version": "111",
   "permissions": ["storage", "alarms"],
