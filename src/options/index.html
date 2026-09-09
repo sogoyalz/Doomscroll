@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Doomscroll settings</title>
+  </head>
+  <body>
+    <!-- See the note in src/popup/index.html: this fallback only appears if
+         the project folder was loaded instead of the built dist folder. -->
+    <div id="root">
+      <div
+        style="
+          max-width: 560px;
+          margin: 48px auto;
+          font: 14px/1.6 system-ui, sans-serif;
+          color: #333;
+        "
+      >
+        <strong style="display: block; margin-bottom: 6px">Wrong folder loaded</strong>
+        This is the build's source file, not the built extension. In
+        <code>chrome://extensions</code>, remove Doomscroll and Load unpacked again,
+        selecting the <strong>dist</strong> folder inside the project — not the project
+        folder itself.
+        <div style="margin-top: 8px; color: #777">
+          Run <code>npm run build</code> first if <code>dist</code> does not exist.
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

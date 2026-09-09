@@ -1,0 +1,8 @@
+node_modules/
+dist/
+doomscroll-*.zip
+.DS_Store
+*.local
+
+# Never commit exported reel data — it is personal viewing history
+*.csv

@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Doomscroll",
+  "version": "0.1.0",
+  "description": "Tracks which Instagram Reels you watch and flags when you're being shown a repetitive stream of similar content.",
+  "minimum_chrome_version": "111",
+  "permissions": ["storage", "alarms"],
+  "optional_permissions": ["notifications"],
+  "host_permissions": ["https://*.instagram.com/*"],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.instagram.com/*"],
+      "exclude_matches": [
+        "https://*.instagram.com/direct/*",
+        "https://*.instagram.com/accounts/*"
+      ],
+      "js": ["src/content/index.ts"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://*.instagram.com/*"],
+      "exclude_matches": [
+        "https://*.instagram.com/direct/*",
+        "https://*.instagram.com/accounts/*"
+      ],
+      "js": ["src/content/main-world.ts"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "48": "assets/icons/icon48.png",
+      "128": "assets/icons/icon128.png"
+    }
+  },
+  "options_page": "src/options/index.html"
+}

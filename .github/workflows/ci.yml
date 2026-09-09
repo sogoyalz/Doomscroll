@@ -1,0 +1,39 @@
+name: CI
+
+# Every branch, not just main. Feature work is exactly where a regression
+# should be caught, and a filter on main means long-lived branches accumulate
+# unverified commits and only fail at merge time.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      # Also exercises the packaging checks: icons present, both content
+      # scripts emitted, the MAIN-world script still registered.
+      - run: npm run package
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Shipping code only. Dev-tool advisories are noise for an extension
+      # that ships no dev dependencies to users.
+      - run: npm audit --omit=dev --audit-level=moderate

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Doomscroll — reel labeler</title>
+    <style>
+      /* Deliberately shows NO classifier guess. Seeing the guess anchors the
+         label to it — that is exactly what produced a meaningless 100% before.
+         You decide what each reel is, cold. */
+      :root {
+        --bg: #0d0d10;
+        --surface: #16161a;
+        --line: #232329;
+        --text: #edecef;
+        --muted: #8b8b95;
+        --faint: #61616b;
+        --accent: #dfae42;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.5 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 24px 20px 60px; }
+      h1 {
+        font-size: 12px; font-weight: 600; letter-spacing: 0.13em;
+        text-transform: uppercase; color: var(--muted); margin: 0 0 20px;
+      }
+      .drop {
+        display: block; border: 1px dashed var(--line); border-radius: 12px; padding: 40px;
+        text-align: center; color: var(--muted); cursor: pointer;
+      }
+      .drop:hover { border-color: var(--faint); color: var(--text); }
+      .bar { height: 3px; background: var(--line); border-radius: 2px; margin: 4px 0 20px; overflow: hidden; }
+      .bar > span { display: block; height: 100%; background: var(--accent); width: 0; transition: width 0.15s; }
+      .count { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--faint); }
+      .card {
+        background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+        padding: 22px; margin-bottom: 22px; min-height: 150px;
+      }
+      .caption { font-size: 18px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+      .caption.empty { color: var(--faint); font-style: italic; font-size: 15px; }
+      .meta { margin-top: 14px; font-size: 13px; color: var(--muted); }
+      .meta .k { color: var(--faint); }
+      .meta .tag { color: var(--accent); }
+      .group-label {
+        font-size: 10px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+        color: var(--faint); margin: 16px 0 8px;
+      }
+      .cats { display: flex; flex-wrap: wrap; gap: 7px; }
+      button.cat {
+        background: var(--surface); color: var(--text); border: 1px solid var(--line);
+        border-radius: 8px; padding: 8px 13px; font: inherit; font-size: 13.5px;
+        cursor: pointer; text-transform: capitalize; transition: border-color 0.1s, background 0.1s;
+      }
+      button.cat:hover { border-color: var(--faint); }
+      button.cat .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 7px; vertical-align: middle; }
+      .row { display: flex; gap: 10px; margin-top: 22px; align-items: center; }
+      button.ghost {
+        background: none; border: 0; color: var(--faint); font: inherit; font-size: 13px; cursor: pointer;
+      }
+      button.ghost:hover { color: var(--text); }
+      button.primary {
+        background: var(--accent); border: 0; color: #14140f; font: inherit; font-weight: 600;
+        font-size: 13.5px; padding: 9px 16px; border-radius: 8px; cursor: pointer;
+      }
+      .done { text-align: center; padding: 40px 0; }
+      .done h2 { font-size: 20px; margin: 0 0 8px; }
+      .done p { color: var(--muted); margin: 0 0 20px; }
+      .hint { font-size: 12px; color: var(--faint); margin-top: 14px; }
+      input[type='file'] { display: none; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Doomscroll · reel labeler</h1>
+      <div id="app"></div>
+    </div>
+
+    <script>
+      // Two tiers + neutral, matching src/shared/taxonomy.ts. Swatch colours
+      // mirror src/shared/palette.ts so the tool reads like the extension.
+      const CHARGED = ['joyful', 'sad', 'breakup', 'anxious', 'angry', 'motivational', 'romantic'];
+      const TOPICS = ['comedy', 'music', 'dance', 'food', 'fitness', 'sports', 'tech', 'fashion', 'travel', 'gaming', 'pets', 'art'];
+      const COLORS = {
+        joyful: '#dfae42', motivational: '#d4823c', romantic: '#c9677f', angry: '#bd5340',
+        breakup: '#8f5f9b', sad: '#5480b4', anxious: '#4f978d',
+        comedy: '#7f7a53', music: '#6d6a86', dance: '#846a80', food: '#87735a', fitness: '#5f7d6e',
+        sports: '#5f7385', tech: '#66707f', fashion: '#83687a', travel: '#5c7c7d', gaming: '#6b6f84',
+        pets: '#84755f', art: '#787084', neutral: '#5a5a63',
+      };
+      const CAP = 150; // label a manageable sample, not all 700
+
+      const app = document.getElementById('app');
+      let rows = [];
+      let i = 0;
+
+      // --- CSV parse / serialize (RFC-4180) ---
+      function parseCSV(text) {
+        const out = []; let row = [], field = '', q = false;
+        for (let k = 0; k < text.length; k++) {
+          const c = text[k];
+          if (q) {
+            if (c === '"') { if (text[k + 1] === '"') { field += '"'; k++; } else q = false; }
+            else field += c;
+          } else if (c === '"') q = true;
+          else if (c === ',') { row.push(field); field = ''; }
+          else if (c === '\n' || c === '\r') { if (c === '\r' && text[k + 1] === '\n') k++; row.push(field); out.push(row); row = []; field = ''; }
+          else field += c;
+        }
+        if (field.length || row.length) { row.push(field); out.push(row); }
+        return out.filter((r) => r.some((v) => v !== ''));
+      }
+      function toObjects(rowsRaw) {
+        const [head, ...body] = rowsRaw;
+        return body.map((r) => Object.fromEntries(head.map((h, j) => [h, r[j] ?? ''])));
+      }
+      function cell(v) { const s = String(v ?? ''); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+      function shuffle(a) { for (let k = a.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [a[k], a[j]] = [a[j], a[k]]; } return a; }
+
+      function renderStart() {
+        app.innerHTML =
+          '<label class="drop" id="drop">Drop your <b>reels.csv</b> here, or click to choose it' +
+          '<div class="hint">Exported from Doomscroll → Settings → Export reels</div></label>' +
+          '<input type="file" id="file" accept=".csv" />';
+        const drop = document.getElementById('drop');
+        const file = document.getElementById('file');
+        drop.onclick = () => file.click();
+        file.onchange = (e) => e.target.files[0] && load(e.target.files[0]);
+        drop.ondragover = (e) => { e.preventDefault(); };
+        drop.ondrop = (e) => { e.preventDefault(); e.dataTransfer.files[0] && load(e.dataTransfer.files[0]); };
+      }
+
+      function load(f) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const recs = toObjects(parseCSV(reader.result));
+          // Label only readable reels — a reel with no text is trivially
+          // "no-text" and needs no human judgment. Faster, and it is the
+          // readable-reel accuracy that actually matters.
+          const readable = recs.filter((r) => (r.captionText || '').trim() || (r.hashtags || '').trim() || (r.audioName || '').trim());
+          rows = shuffle(readable).slice(0, CAP).map((r) => ({ ...r, humanLabel: '' }));
+          i = 0;
+          if (!rows.length) { app.innerHTML = '<p class="caption empty">No readable reels found in that file.</p>'; return; }
+          renderCard();
+        };
+        reader.readAsText(f);
+      }
+
+      function label(cat) {
+        rows[i].humanLabel = cat;
+        if (i < rows.length - 1) { i++; renderCard(); } else renderDone();
+      }
+
+      function group(title, cats) {
+        return '<div class="group-label">' + title + '</div><div class="cats">' +
+          cats.map((c) =>
+            '<button class="cat" data-cat="' + c + '"><span class="sw" style="background:' + (COLORS[c] || '#5a5a63') + '"></span>' + c + '</button>'
+          ).join('') + '</div>';
+      }
+
+      function renderCard() {
+        const r = rows[i];
+        const cap = (r.captionText || '').trim();
+        const tags = (r.hashtags || '').trim();
+        const audio = (r.audioName || '').trim();
+        app.innerHTML =
+          '<div class="count"><span>' + (i + 1) + ' / ' + rows.length + '</span><span>' + Math.round((i / rows.length) * 100) + '%</span></div>' +
+          '<div class="bar"><span style="width:' + (i / rows.length) * 100 + '%"></span></div>' +
+          '<div class="card">' +
+            (cap ? '<div class="caption">' + esc(cap) + '</div>' : '<div class="caption empty">(no caption)</div>') +
+            (tags ? '<div class="meta"><span class="k">tags</span> <span class="tag">' + esc(tags) + '</span></div>' : '') +
+            (audio ? '<div class="meta"><span class="k">audio</span> ' + esc(audio) + '</div>' : '') +
+          '</div>' +
+          group('Emotional (charged)', CHARGED) +
+          group('Topic', TOPICS) +
+          group('Neither fits', ['neutral']) +
+          '<div class="row">' +
+            (i > 0 ? '<button class="ghost" id="back">&larr; back</button>' : '') +
+            '<span style="flex:1"></span>' +
+            '<button class="ghost" id="finish">finish early &amp; download</button>' +
+          '</div>' +
+          '<div class="hint">Pick what the reel is really about. No classifier guess is shown on purpose.</div>';
+        app.querySelectorAll('button.cat').forEach((b) => (b.onclick = () => label(b.dataset.cat)));
+        const back = document.getElementById('back');
+        if (back) back.onclick = () => { i--; renderCard(); };
+        document.getElementById('finish').onclick = () => renderDone();
+      }
+
+      function renderDone() {
+        const labeled = rows.filter((r) => r.humanLabel);
+        app.innerHTML =
+          '<div class="done"><h2>' + labeled.length + ' reels labeled</h2>' +
+          '<p>Download the file, then run:<br><code>node scripts/eval.mjs eval labeled.csv</code></p>' +
+          '<button class="primary" id="dl">Download labeled.csv</button></div>';
+        document.getElementById('dl').onclick = () => download(labeled);
+      }
+
+      function download(labeled) {
+        const head = ['humanLabel', 'captionText', 'hashtags', 'audioName'];
+        const lines = [head.join(',')].concat(
+          labeled.map((r) => [r.humanLabel, cell(r.captionText), cell(r.hashtags), cell(r.audioName)].join(','))
+        );
+        const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'labeled.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      function esc(s) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      renderStart();
+    </script>
+  </body>
+</html>
