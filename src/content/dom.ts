@@ -65,16 +65,15 @@ export function bridgeStatus(doc: Document = document): BridgeStatus {
  * user switched tracking off — while the options page promised "nothing is
  * observed at all; the extension stops watching the page".
  *
- * Absent means on. The MAIN-world script runs before the isolated one has
- * read storage, and defaulting to off would drop the shortcodes for the first
- * reels of every page load.
+ * Absent means paused until the isolated script has read the saved setting.
+ * A saved pause must also be respected during page initialization.
  */
 export const TRACKING_ATTR = 'data-doomscroll-tracking';
 
 export function trackingPaused(doc: Document = document): boolean {
   return (
     !isTrackingSurface(doc.location?.pathname ?? '/') ||
-    doc.documentElement.getAttribute(TRACKING_ATTR) === 'off'
+    doc.documentElement.getAttribute(TRACKING_ATTR) !== 'on'
   );
 }
 

@@ -96,6 +96,10 @@ test('packaged popup and settings load with a working pause control', async () =
   await popup.goto(`chrome-extension://${extensionId}/src/popup/index.html`);
   await expect(popup.getByRole('heading', { name: 'Doomscroll' })).toBeVisible();
   await expect(popup.locator('body')).not.toContainText('Couldn’t load');
+  const pausedFeed = await context.newPage();
+  await pausedFeed.goto('https://www.instagram.com/reels/synthetic/');
+  await expect(pausedFeed.locator('html')).toHaveAttribute('data-doomscroll-tracking', 'off');
+  await expect(pausedFeed.locator('[data-doomscroll-shortcode]')).toHaveCount(0);
 });
 
 test('real content scripts record scrolling, extract audio, and respect SPA privacy exclusions', async () => {

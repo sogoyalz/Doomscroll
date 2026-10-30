@@ -20,6 +20,7 @@ import {
   SHORTCODE_ATTR,
   SHORTCODE_SRC_ATTR,
   trackingPaused,
+  TRACKING_ATTR,
 } from './dom.js';
 
 // memoizedProps.media.code was found within ~5 levels; 30 is generous
@@ -173,11 +174,19 @@ function syncObserver(): void {
 function start(): void {
   syncObserver();
   tagContainers();
+  // Respond immediately when the isolated world publishes the saved setting.
+  // Observe only this attribute, never page content while tracking is paused.
+  const settingObserver = new MutationObserver(() => {
+    syncObserver();
+    tagContainers();
+  });
+  settingObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: [TRACKING_ATTR],
+  });
 
-  // Safety net for re-renders that neither mutate body nor drop the node, and
-  // the only thing that notices tracking being switched back on: the MAIN
-  // world cannot subscribe to chrome.storage, so the attribute has to be
-  // polled. One attribute read a second, which is why the interval stays.
+  // Safety net for re-renders and SPA transitions that do not mutate the
+  // observed content. Also catches changes missed while the observer was off.
   setInterval(() => {
     syncObserver();
     tagContainers();

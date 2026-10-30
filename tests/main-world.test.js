@@ -55,7 +55,7 @@ const mw = await import('../src/content/main-world.ts');
 beforeEach(() => {
   document.body.innerHTML = '';
   document.documentElement.removeAttribute(BRIDGE_STATUS_ATTR);
-  document.documentElement.removeAttribute(TRACKING_ATTR);
+  document.documentElement.setAttribute(TRACKING_ATTR, 'on');
   window.innerHeight = 800;
 });
 
@@ -175,9 +175,10 @@ describe('pausing tracking stops the bridge', () => {
     expect(el.getAttribute(SHORTCODE_ATTR)).toBe('Dbv6giIR-kt');
   });
 
-  it('treats a missing attribute as on, so it works before the isolated script runs', () => {
+  it('waits for the saved tracking setting before reading the page', () => {
+    document.documentElement.removeAttribute(TRACKING_ATTR);
     const el = container({ code: 'Dbv6giIR-kt' });
     mw.tagContainers();
-    expect(el.getAttribute(SHORTCODE_ATTR)).toBe('Dbv6giIR-kt');
+    expect(el.getAttribute(SHORTCODE_ATTR)).toBeNull();
   });
 });
