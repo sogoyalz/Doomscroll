@@ -59,6 +59,12 @@ describe('sensitive-data push guard', () => {
     expect(check('HEAD').status).toBe(1);
   });
 
+  it('rejects legacy workspace backups even when force-added', () => {
+    add('.workspace-backup/old-source.js', 'synthetic fixture');
+    commit();
+    expect(check('HEAD').status).toBe(1);
+  });
+
   it('rejects a deleted secret without printing its value', () => {
     const secret = 'ghp_' + 'x'.repeat(36);
     add('config.txt', secret);
