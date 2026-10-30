@@ -218,9 +218,7 @@ export function decideIntervention(input: InterventionInput): InterventionDecisi
 }
 
 export function cooldownFor(level: InterventionLevel, settings: UserSettings): number {
-  return level === 'block'
-    ? settings.interventionLevels.blockCooldownMs
-    : COOLDOWN_MS[level];
+  return level === 'block' ? settings.interventionLevels.blockCooldownMs : COOLDOWN_MS[level];
 }
 
 /**

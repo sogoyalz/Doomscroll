@@ -13,7 +13,6 @@ export function localDateKey(timestamp: number): string {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
-
 /**
  * Start of the local day `daysBack` days before `timestamp`.
  *

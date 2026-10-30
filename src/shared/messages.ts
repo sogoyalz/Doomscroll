@@ -14,7 +14,18 @@ import type {
 import type { TuningReport } from './tuning.js';
 import type { AuthorBreakdown, SessionSummary } from './insights.js';
 
+/**
+ * Which history the user asked to export.
+ *
+ * Named rather than a bare union of strings because the background switches
+ * on it to decide what to read: the three exports draw from three different
+ * stores, and building all of them for every click meant reading the whole
+ * database three times over for two results that were thrown away.
+ */
+export type ExportKind = 'reels' | 'detection' | 'interventions';
+
 export type ExtensionMessage =
+  | { type: 'GET_SESSION_ID'; payload: { startedAt: number; endedAt: number } }
   | { type: 'REEL_VIEW_LOGGED'; payload: NewReelEvent }
   // Background -> content script, via chrome.tabs.sendMessage. The only
   // message that travels in that direction, and the reason the content script
@@ -47,7 +58,7 @@ export type ExtensionMessage =
   | { type: 'GET_SESSION_REELS'; payload: { sessionId: string } }
   | { type: 'GET_SETTINGS'; payload: Record<string, never> }
   | { type: 'UPDATE_SETTINGS'; payload: Partial<UserSettings> }
-  | { type: 'EXPORT_DATA'; payload: Record<string, never> }
+  | { type: 'EXPORT_DATA'; payload: { which: ExportKind } }
   | { type: 'CLEAR_DATA'; payload: Record<string, never> };
 
 export type MessageType = ExtensionMessage['type'];
@@ -63,6 +74,7 @@ export type MessageResult<T> = { ok: true; data: T } | { ok: false; error: strin
 
 // Response shape per route, so senders get a typed result back.
 export interface MessageResponses {
+  GET_SESSION_ID: { id: string };
   REEL_VIEW_LOGGED: { queued: boolean };
   /** Whether the content script actually put something on screen. */
   INTERVENE: { shown: boolean };
@@ -79,8 +91,17 @@ export interface MessageResponses {
   /** One session's reels, oldest first — the sequence, not a rollup. */
   GET_SESSION_REELS: ReelEvent[];
   GET_SETTINGS: UserSettings;
-  UPDATE_SETTINGS: { ok: true };
-  /** Reel history, detection decisions, and interruptions, as separate CSVs. */
-  EXPORT_DATA: { reelsCsv: string; detectionCsv: string; interventionsCsv: string };
+  /**
+   * The settings as they were actually stored, not the patch that was sent.
+   *
+   * Every numeric field is clamped on the way in, so the two differ whenever
+   * the caller sent something out of range. Returning the stored object lets
+   * the options page render what is true rather than what it asked for — it
+   * applies the patch optimistically, and a typed 999 would otherwise sit in
+   * the field looking saved while detection ran on the clamped 100.
+   */
+  UPDATE_SETTINGS: UserSettings;
+  /** One CSV, the one that was asked for. */
+  EXPORT_DATA: { filename: string; csv: string };
   CLEAR_DATA: { ok: true };
 }

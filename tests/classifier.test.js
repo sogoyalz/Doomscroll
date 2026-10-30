@@ -48,7 +48,9 @@ describe('clear-cut category cases', () => {
   });
 
   it('reports the terms that drove the decision', () => {
-    const result = classify(input({ captionText: 'so much anxiety', hashtags: ['overthinking'] }));
+    const result = classify(
+      input({ captionText: 'so much anxiety', hashtags: ['overthinking'] }),
+    );
     expect(result.subtags).toContain('anxiety');
     expect(result.subtags).toContain('#overthinking');
   });
@@ -63,9 +65,12 @@ describe('clear-cut category cases', () => {
       ['tech', 'quick python coding tutorial', ['programming']],
       ['travel', 'weekend trip to the mountains', ['wanderlust']],
       ['pets', 'my puppy learned a new trick', ['dogsofinstagram']],
-    ])('names %s content that would otherwise be neutral', (expected, captionText, hashtags) => {
-      expect(classify(input({ captionText, hashtags })).category).toBe(expected);
-    });
+    ])(
+      'names %s content that would otherwise be neutral',
+      (expected, captionText, hashtags) => {
+        expect(classify(input({ captionText, hashtags })).category).toBe(expected);
+      },
+    );
 
     it('leaves genuinely topic-less text as neutral', () => {
       expect(classify(input({ captionText: 'the meeting is at four tomorrow' })).category).toBe(
@@ -83,7 +88,10 @@ describe('clear-cut category cases', () => {
 
     it('reads a gym-motivation clip as motivational, not fitness, when motivation leads', () => {
       const result = classify(
-        input({ captionText: 'discipline over motivation, no excuses', hashtags: ['grindset'] }),
+        input({
+          captionText: 'discipline over motivation, no excuses',
+          hashtags: ['grindset'],
+        }),
       );
       expect(result.category).toBe('motivational');
     });
@@ -167,9 +175,9 @@ describe('signal weighting', () => {
       // Natural-language sadness with one term and no margin used to fall
       // below the confidence floor into neutral — a miss the detector can
       // never recover. The detection layer enforces precision instead.
-      expect(classify(input({ captionText: 'why does it always hurt like this' })).category).toBe(
-        'sad',
-      );
+      expect(
+        classify(input({ captionText: 'why does it always hurt like this' })).category,
+      ).toBe('sad');
     });
 
     it('rescues a charged reel that ties between two charged categories', () => {
@@ -182,7 +190,9 @@ describe('signal weighting', () => {
     it('does NOT rescue an audio-only charged hit', () => {
       // A song title is not authored by the poster and routinely mismatches
       // the content, so a lone half-weight audio match stays neutral.
-      expect(classify(input({ audioName: 'Some Artist · Heartbreak' })).category).toBe('neutral');
+      expect(classify(input({ audioName: 'Some Artist · Heartbreak' })).category).toBe(
+        'neutral',
+      );
     });
 
     it('does NOT rescue a weak TOPIC signal — topics keep the floor', () => {
@@ -223,13 +233,15 @@ describe('confidence', () => {
     // "love" is among the most overloaded tokens on the platform, so it is
     // deliberately not a romantic term on its own. ("recipe" now lands this
     // on the food topic, which is correct — the point is it is not romantic.)
-    expect(classify(input({ captionText: 'i love this pasta recipe so much' })).category).not.toBe(
-      'romantic',
-    );
+    expect(
+      classify(input({ captionText: 'i love this pasta recipe so much' })).category,
+    ).not.toBe('romantic');
   });
 
   it('still reads an explicit romantic phrase', () => {
-    expect(classify(input({ captionText: 'i am so in love with him' })).category).toBe('romantic');
+    expect(classify(input({ captionText: 'i am so in love with him' })).category).toBe(
+      'romantic',
+    );
   });
 });
 

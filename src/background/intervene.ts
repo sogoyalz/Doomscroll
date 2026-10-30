@@ -101,6 +101,7 @@ export async function maybeIntervene(
     at: now,
     sessionId,
     level,
+    deliveredAt: null,
     category: detection.category,
     streak: detection.streak,
     share: detection.share,
@@ -111,10 +112,13 @@ export async function maybeIntervene(
     breakEndedEarlyAt: null,
   };
   await putInterventionLog(entry);
+  const delivered =
+    level === 'notify'
+      ? await notify(detection)
+      : await sendToTab(tabId, entry.id, level, detection);
+  if (!delivered) return null;
+  await putInterventionLog({ ...entry, deliveredAt: now });
   await writeState(recordFired(state, level, sessionId, now));
-
-  if (level === 'notify') await notify(detection);
-  else await sendToTab(tabId, entry.id, level, detection);
 
   return level;
 }
@@ -128,7 +132,7 @@ export async function maybeIntervene(
 function notificationText(detection: PatternDetection): string {
   const what = detection.category ? `${detection.category} content` : 'similar content';
   return (
-    `The last ${detection.streak} reels in a row have been ${what} — ` +
+    `The last ${detection.streak} classified reels in a row have been ${what} — ` +
     'more than your feed usually serves you.'
   );
 }
@@ -142,8 +146,8 @@ function notificationText(detection: PatternDetection): string {
  * until a week of history exists. So `chrome.notifications` may simply not be
  * there, which is a decision the user made and not a fault.
  */
-async function notify(detection: PatternDetection): Promise<void> {
-  if (!chrome.notifications) return;
+async function notify(detection: PatternDetection): Promise<boolean> {
+  if (!chrome.notifications) return false;
 
   try {
     await chrome.notifications.create({
@@ -155,8 +159,10 @@ async function notify(detection: PatternDetection): Promise<void> {
       // user must dismiss is a second interruption on top of the first.
       requireInteraction: false,
     });
+    return true;
   } catch (err) {
     console.warn('Doomscroll: notification failed', err);
+    return false;
   }
 }
 
@@ -165,16 +171,18 @@ async function sendToTab(
   id: string,
   level: InterventionLevel,
   detection: PatternDetection,
-): Promise<void> {
-  if (tabId === undefined) return;
+): Promise<boolean> {
+  if (tabId === undefined) return false;
   try {
-    await chrome.tabs.sendMessage(tabId, {
+    const reply = await chrome.tabs.sendMessage(tabId, {
       type: 'INTERVENE',
       payload: { id, level, category: detection.category, streak: detection.streak },
     });
+    return reply?.ok === true && reply.data?.shown === true;
   } catch {
     // The tab closed or navigated between the reel being reported and this
     // being sent. The log row stays 'pending'.
+    return false;
   }
 }
 

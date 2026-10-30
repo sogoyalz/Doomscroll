@@ -23,6 +23,7 @@ export default defineConfig({
     },
   },
   test: {
+    include: ['tests/**/*.test.js'],
     // Most of this codebase reads Instagram's DOM, so jsdom is the useful
     // default. Note jsdom does not implement innerText — extractor.ts falls
     // back to textContent, which is the path these tests exercise.

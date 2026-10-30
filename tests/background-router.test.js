@@ -16,7 +16,11 @@ let listener;
 
 globalThis.chrome = {
   runtime: {
-    onMessage: { addListener: (fn) => { listener = fn; } },
+    onMessage: {
+      addListener: (fn) => {
+        listener = fn;
+      },
+    },
     onInstalled: { addListener() {} },
     onStartup: { addListener() {} },
     getURL: (p) => p,
@@ -24,14 +28,24 @@ globalThis.chrome = {
   alarms: {
     onAlarm: { addListener() {} },
     create() {},
-    async get() { return undefined; },
-    async clear() { return true; },
+    async get() {
+      return undefined;
+    },
+    async clear() {
+      return true;
+    },
   },
   storage: {
     local: {
-      async get(key) { return key in store ? { [key]: store[key] } : {}; },
-      async set(entries) { Object.assign(store, entries); },
-      async remove(key) { delete store[key]; },
+      async get(key) {
+        return key in store ? { [key]: store[key] } : {};
+      },
+      async set(entries) {
+        Object.assign(store, entries);
+      },
+      async remove(key) {
+        delete store[key];
+      },
     },
     onChanged: { addListener() {} },
   },
@@ -43,10 +57,10 @@ await import('../src/background/index.ts');
 
 const { closeDB, getAllReelEvents } = await import('../src/background/db.ts');
 const { DIRTY_DAYS_KEY } = await import('../src/background/aggregator.ts');
-const { readStorageFailure, resetStorageHealthCache } = await import(
-  '../src/shared/storage-health.ts'
-);
+const { readStorageFailure, resetStorageHealthCache } =
+  await import('../src/shared/storage-health.ts');
 const db = await import('../src/background/db.ts');
+const aggregator = await import('../src/background/aggregator.ts');
 
 const NOW = new Date(2026, 7, 20, 15, 0, 0).getTime();
 
@@ -76,9 +90,17 @@ beforeEach(async () => {
   store = {};
   detect.runDetection.mockReset();
   detect.runDetection.mockResolvedValue({
-    detected: false, trigger: null, streak: 0, category: null, share: 0,
-    baselineShare: 0, ratio: 0, windowSample: 0, chargedSample: 0,
-    baselineSample: 0, reason: 'insufficient-history',
+    detected: false,
+    trigger: null,
+    streak: 0,
+    category: null,
+    share: 0,
+    baselineShare: 0,
+    ratio: 0,
+    windowSample: 0,
+    chargedSample: 0,
+    baselineSample: 0,
+    reason: 'insufficient-history',
   });
   await closeDB();
   await new Promise((resolve) => {
@@ -180,9 +202,18 @@ describe('CLEAR_DATA', () => {
     const { putInterventionLog, getInterventionLog } = await import('../src/background/db.ts');
 
     await putInterventionLog({
-      id: 'i1', at: NOW, sessionId: 's1', level: 'overlay', category: 'sad',
-      streak: 12, share: 0.8, ratio: 2, outcome: 'accepted', respondedAt: NOW,
-      breakStartedAt: null, breakEndedEarlyAt: null,
+      id: 'i1',
+      at: NOW,
+      sessionId: 's1',
+      level: 'overlay',
+      category: 'sad',
+      streak: 12,
+      share: 0.8,
+      ratio: 2,
+      outcome: 'accepted',
+      respondedAt: NOW,
+      breakStartedAt: null,
+      breakEndedEarlyAt: null,
     });
     await beginBreak('i1', NOW);
     await send({ type: 'CLEAR_DATA', payload: {} });
@@ -199,7 +230,7 @@ describe('a database that will not take writes', () => {
   it('records the failure where the dashboard can find it', async () => {
     resetStorageHealthCache();
     const spy = vi
-      .spyOn(db, 'recordReelView')
+      .spyOn(db, 'recordReelViewOnce')
       .mockRejectedValue(new Error('QuotaExceededError'));
 
     await send({ type: 'REEL_VIEW_LOGGED', payload: payload() });
@@ -212,7 +243,7 @@ describe('a database that will not take writes', () => {
 
   it('does not aggregate a day whose reel was never stored', async () => {
     resetStorageHealthCache();
-    const spy = vi.spyOn(db, 'recordReelView').mockRejectedValue(new Error('disk full'));
+    const spy = vi.spyOn(db, 'recordReelViewOnce').mockRejectedValue(new Error('disk full'));
 
     await send({ type: 'REEL_VIEW_LOGGED', payload: payload() });
 
@@ -224,7 +255,7 @@ describe('a database that will not take writes', () => {
 
   it('clears the warning once writes start working again', async () => {
     resetStorageHealthCache();
-    const spy = vi.spyOn(db, 'recordReelView').mockRejectedValue(new Error('disk full'));
+    const spy = vi.spyOn(db, 'recordReelViewOnce').mockRejectedValue(new Error('disk full'));
     await send({ type: 'REEL_VIEW_LOGGED', payload: payload() });
     expect(await readStorageFailure()).not.toBeNull();
     spy.mockRestore();
@@ -248,6 +279,143 @@ describe('what counts as a storage failure', () => {
     await send({ type: 'REEL_VIEW_LOGGED', payload: payload() });
 
     expect(await readStorageFailure()).toBeNull();
+    spy.mockRestore();
+  });
+});
+
+describe('UPDATE_SETTINGS replies with what was stored', () => {
+  // The page applies a settings change optimistically and then adopts this
+  // reply. When it was `{ ok: true }` the optimistic value was the only one
+  // the page ever had, so an out-of-range number stayed on screen looking
+  // saved while detection ran on the clamped one.
+  it('returns the clamped value, not the value that was sent', async () => {
+    const reply = await send({
+      type: 'UPDATE_SETTINGS',
+      payload: { patternWindowSize: 999 },
+    });
+
+    expect(reply.ok).toBe(true);
+    expect(reply.data.patternWindowSize).toBe(100);
+  });
+
+  it('returns the floor when the field was emptied', async () => {
+    // An emptied <input type="number"> reads as 0, which is a window that can
+    // never fire. The page has to be told the stored value is 8.
+    const reply = await send({
+      type: 'UPDATE_SETTINGS',
+      payload: { patternWindowSize: 0 },
+    });
+
+    expect(reply.data.patternWindowSize).toBeGreaterThan(0);
+    expect(reply.data.patternWindowSize).toBe(
+      (await send({ type: 'GET_SETTINGS', payload: {} })).data.patternWindowSize,
+    );
+  });
+
+  it('returns the whole settings object, not just the patched field', async () => {
+    const reply = await send({
+      type: 'UPDATE_SETTINGS',
+      payload: { trackingEnabled: false },
+    });
+
+    expect(reply.data.trackingEnabled).toBe(false);
+    expect(reply.data.watchedCategories).toBeInstanceOf(Array);
+    expect(reply.data.interventionLevels).toBeTruthy();
+  });
+});
+
+describe('EXPORT_DATA builds one export per call', () => {
+  beforeEach(async () => {
+    await send({ type: 'REEL_VIEW_LOGGED', payload: payload() });
+  });
+
+  it('returns the reels CSV under its own filename', async () => {
+    const { data } = await send({ type: 'EXPORT_DATA', payload: { which: 'reels' } });
+
+    expect(data.filename).toBe('doomscroll-reels.csv');
+    expect(data.csv).toContain('reelShortcode');
+  });
+
+  it('returns the detection log under its own filename', async () => {
+    const { data } = await send({ type: 'EXPORT_DATA', payload: { which: 'detection' } });
+
+    expect(data.filename).toBe('doomscroll-detection-log.csv');
+  });
+
+  it('reads only the store the caller asked for', async () => {
+    // The point of the `which` parameter. Building all three meant a click on
+    // "Export reels" walked both logs as well and threw the results away.
+    const reels = vi.spyOn(db, 'getAllReelEvents');
+    const detection = vi.spyOn(db, 'getDetectionLog');
+
+    await send({ type: 'EXPORT_DATA', payload: { which: 'reels' } });
+
+    expect(reels).toHaveBeenCalled();
+    expect(detection).not.toHaveBeenCalled();
+    reels.mockRestore();
+    detection.mockRestore();
+  });
+});
+
+describe('changing the session gap rebuilds history', () => {
+  // sessionGapThresholdMs is baked into every stored aggregate's
+  // longestBingeMs. Nothing reacted to it changing, and only today is ever
+  // recomputed on demand, so past days kept the old value permanently and the
+  // dashboard mixed two different measures on one chart.
+  const MIN = 60_000;
+
+  it('recomputes past days when the gap actually changes', async () => {
+    const spy = vi.spyOn(aggregator, 'recomputeAllDays').mockResolvedValue([]);
+
+    await send({ type: 'UPDATE_SETTINGS', payload: { sessionGapThresholdMs: 10 * MIN } });
+
+    expect(spy).toHaveBeenCalledWith(10 * MIN);
+    spy.mockRestore();
+  });
+
+  it('does not rebuild when the gap is unchanged', async () => {
+    await send({ type: 'UPDATE_SETTINGS', payload: { sessionGapThresholdMs: 10 * MIN } });
+    const spy = vi.spyOn(aggregator, 'recomputeAllDays').mockResolvedValue([]);
+
+    await send({ type: 'UPDATE_SETTINGS', payload: { sessionGapThresholdMs: 10 * MIN } });
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('does not rebuild for a setting that has nothing to do with rollups', async () => {
+    const spy = vi.spyOn(aggregator, 'recomputeAllDays').mockResolvedValue([]);
+
+    await send({ type: 'UPDATE_SETTINGS', payload: { debugHud: true } });
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('compares against the stored value, not the clamped patch', async () => {
+    // 500 minutes clamps to the 120-minute ceiling. Sending it twice must
+    // rebuild once: the second write stores the same value as the first.
+    await send({ type: 'UPDATE_SETTINGS', payload: { sessionGapThresholdMs: 500 * MIN } });
+    const spy = vi.spyOn(aggregator, 'recomputeAllDays').mockResolvedValue([]);
+
+    await send({ type: 'UPDATE_SETTINGS', payload: { sessionGapThresholdMs: 500 * MIN } });
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('still replies with the stored settings when the rebuild fails', async () => {
+    const spy = vi
+      .spyOn(aggregator, 'recomputeAllDays')
+      .mockRejectedValue(new Error('disk full'));
+
+    const reply = await send({
+      type: 'UPDATE_SETTINGS',
+      payload: { sessionGapThresholdMs: 7 * MIN },
+    });
+
+    expect(reply.ok).toBe(true);
+    expect(reply.data.sessionGapThresholdMs).toBe(7 * MIN);
     spy.mockRestore();
   });
 });

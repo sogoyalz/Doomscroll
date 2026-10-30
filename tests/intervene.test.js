@@ -106,7 +106,7 @@ describe('decideIntervention', () => {
     expect(result.act).toBe(true);
   });
 
-  it('uses the user\'s own cooldown for the block level', () => {
+  it("uses the user's own cooldown for the block level", () => {
     expect(cooldownFor('block', on)).toBe(LEVELS.blockCooldownMs);
     expect(cooldownFor('notify', on)).toBe(COOLDOWN_MS.notify);
     expect(cooldownFor('overlay', on)).toBe(COOLDOWN_MS.overlay);
@@ -127,7 +127,9 @@ describe('a break outranks everything', () => {
   it('says nothing while a break is running', () => {
     // Interrupting during a break the user just agreed to is the tool being
     // the thing it exists to name.
-    const result = decideIntervention(input({ onBreak: true, streak: LEVELS.blockAfterStreak }));
+    const result = decideIntervention(
+      input({ onBreak: true, streak: LEVELS.blockAfterStreak }),
+    );
     expect(result.act).toBe(false);
     expect(result.reason).toBe('on-a-break');
   });
@@ -199,8 +201,24 @@ describe('summarizeInterventions', () => {
     ]);
 
     expect(rows).toEqual([
-      { level: 'notify', shown: 3, accepted: 1, bypassed: 2, pending: 0, breaks: 0, brokenEarly: 0 },
-      { level: 'overlay', shown: 1, accepted: 1, bypassed: 0, pending: 0, breaks: 0, brokenEarly: 0 },
+      {
+        level: 'notify',
+        shown: 3,
+        accepted: 1,
+        bypassed: 2,
+        pending: 0,
+        breaks: 0,
+        brokenEarly: 0,
+      },
+      {
+        level: 'overlay',
+        shown: 1,
+        accepted: 1,
+        bypassed: 0,
+        pending: 0,
+        breaks: 0,
+        brokenEarly: 0,
+      },
     ]);
   });
 

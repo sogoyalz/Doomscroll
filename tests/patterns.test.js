@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   baselineShares,
+  baselineStatus,
   categoryShares,
   chargedBaselineShares,
   chargedShares,
@@ -23,6 +24,30 @@ const config = {
   baselineMultiplier: DEFAULT_SETTINGS.patternBaselineMultiplier,
   watchedCategories: DEFAULT_SETTINGS.watchedCategories,
 };
+
+describe('baseline readiness', () => {
+  const now = new Date(2026, 7, 20, 12).getTime();
+  it('does not count empty days as baseline history', () => {
+    const baseline = days(7, { sad: 0 });
+    baseline[0] = { ...baseline[0], totalReels: 100, categoryBreakdown: { sad: 100 } };
+    expect(detectPattern(runOf('sad', 15), baseline, config, now).reason).toBe(
+      'insufficient-history',
+    );
+  });
+  it('does not use activity outside the detector’s lookback for UI readiness', () => {
+    expect(baselineStatus(days(7, { sad: 10 }), now).ready).toBe(false);
+  });
+  it('requires both activity days and a charged sample', () => {
+    const baseline = Array.from({ length: 7 }, (_, i) => ({
+      date: localDateKey(startOfLocalDayBefore(now, i + 1)),
+      totalReels: 100,
+      categoryBreakdown: { neutral: 99, sad: 1 },
+    }));
+    expect(baselineStatus(baseline, now)).toMatchObject({ days: 7, sample: 7, ready: false });
+    baseline[0].categoryBreakdown.sad = 30;
+    expect(baselineStatus(baseline, now).ready).toBe(true);
+  });
+});
 
 let nextId = 0;
 const event = (category) => ({
@@ -95,7 +120,10 @@ describe('chargedShares', () => {
   });
 
   it('is empty when the feed has no charged reels', () => {
-    expect(chargedShares({ food: 10, comedy: 5, neutral: 8 })).toEqual({ shares: {}, charged: 0 });
+    expect(chargedShares({ food: 10, comedy: 5, neutral: 8 })).toEqual({
+      shares: {},
+      charged: 0,
+    });
   });
 });
 
@@ -118,7 +146,11 @@ describe('baselineShares', () => {
 
 describe('cold start', () => {
   it('refuses to decide without enough days of history', () => {
-    const result = detectPattern(runOf('sad', 15), days(MIN_BASELINE_DAYS - 1, { sad: 50 }), config);
+    const result = detectPattern(
+      runOf('sad', 15),
+      days(MIN_BASELINE_DAYS - 1, { sad: 50 }),
+      config,
+    );
     expect(result.detected).toBe(false);
     expect(result.reason).toBe('insufficient-history');
   });
@@ -208,7 +240,11 @@ describe('detectPattern', () => {
 
   it('records the inputs behind a near miss', () => {
     // Near misses are what make the log worth reviewing.
-    const result = detectPattern(runOf('sad', 15), days(MIN_BASELINE_DAYS, { sad: 80, joyful: 20 }), config);
+    const result = detectPattern(
+      runOf('sad', 15),
+      days(MIN_BASELINE_DAYS, { sad: 80, joyful: 20 }),
+      config,
+    );
     expect(result.detected).toBe(false);
     expect(result.baselineShare).toBeCloseTo(0.8);
     expect(result.ratio).toBeCloseTo(1.25);
@@ -293,11 +329,7 @@ describe('detection on a realistic mixed feed', () => {
   it('refuses when too few charged reels are in the window', () => {
     // A feed that is almost all topics: a couple of stray emotional clips
     // must not read as a loop.
-    const mostlyTopics = [
-      ...runOf('breakup', 3),
-      ...runOf('food', 6),
-      ...runOf('comedy', 6),
-    ];
+    const mostlyTopics = [...runOf('breakup', 3), ...runOf('food', 6), ...runOf('comedy', 6)];
     const result = detectPattern(mostlyTopics, normalBaseline, config);
     expect(result.chargedSample).toBeLessThan(MIN_CHARGED_SAMPLE);
     expect(result.reason).toBe('insufficient-charged-sample');
@@ -346,19 +378,19 @@ describe('recency-weighted baseline', () => {
   it('weights a recent day above an old one', () => {
     // Same counts, opposite categories, a fortnight apart. The recent day
     // should dominate the resulting shares.
-    const aggregates = [
-      dayAged(NOW, 1, { sad: 50 }),
-      dayAged(NOW, 14, { angry: 50 }),
-    ];
+    const aggregates = [dayAged(NOW, 1, { sad: 50 }), dayAged(NOW, 14, { angry: 50 })];
     const { shares } = chargedBaselineShares(aggregates, NOW);
     expect(shares.sad).toBeGreaterThan(shares.angry);
   });
 
-  it('halves a day\'s contribution every half-life', () => {
+  it("halves a day's contribution every half-life", () => {
     const recent = chargedBaselineShares([dayAged(NOW, 1, { sad: 100 })], NOW);
     // A day exactly one half-life older than another contributes half as much.
     const mixed = chargedBaselineShares(
-      [dayAged(NOW, 1, { sad: 100 }), dayAged(NOW, 1 + BASELINE_HALF_LIFE_DAYS, { angry: 100 })],
+      [
+        dayAged(NOW, 1, { sad: 100 }),
+        dayAged(NOW, 1 + BASELINE_HALF_LIFE_DAYS, { angry: 100 }),
+      ],
       NOW,
     );
     expect(recent.shares.sad).toBe(1);
@@ -392,8 +424,10 @@ describe('recency-weighted baseline', () => {
     // day aged out the baseline lurched, and an unchanged feed could go from
     // "within baseline" to flagged overnight.
     const at = (age) =>
-      chargedBaselineShares([dayAged(NOW, 1, { sad: 50 }), dayAged(NOW, age, { angry: 50 })], NOW)
-        .shares.sad;
+      chargedBaselineShares(
+        [dayAged(NOW, 1, { sad: 50 }), dayAged(NOW, age, { angry: 50 })],
+        NOW,
+      ).shares.sad;
     const before = at(7);
     const after = at(8);
     expect(Math.abs(after - before)).toBeLessThan(0.05);

@@ -1,20 +1,20 @@
 # Test fixtures
 
-`reelFeed.js` is a synthetic Instagram Reels DOM fixture, mirroring the
-generalized structure recorded in [`docs/dom-notes.md`](../../docs/dom-notes.md).
-Handles, captions, audio names, shortcodes, and media URLs are invented — the
+`reelFeed.js` is a sanitized snapshot of the Instagram Reels DOM, mirroring
+the structure recorded in [`docs/dom-notes.md`](../../docs/dom-notes.md) from
+a live session. Handles, captions, and media URLs are invented — the
 **structure** is what is under test.
 
 It covers the null cases seen in the wild, because these are what break
 extraction in practice rather than the happy path:
 
-| Reel | Case |
-|---|---|
-| 0 | Fully populated: caption, hashtags, audio, shortcode |
-| 1 | No hashtags |
-| 2 | Original audio — no `/reels/audio/` link at all |
-| 3 | Captionless, and no shortcode (exercises the fallback identity) |
-| 4 | Unhydrated placeholder — player chrome mounted, nothing inside |
+| Reel | Case                                                            |
+| ---- | --------------------------------------------------------------- |
+| 0    | Fully populated: caption, hashtags, audio, shortcode            |
+| 1    | No hashtags                                                     |
+| 2    | Original audio — no `/reels/audio/` link at all                 |
+| 3    | Captionless, and no shortcode (exercises the fallback identity) |
+| 4    | Unhydrated placeholder — player chrome mounted, nothing inside  |
 
 `mountFeed()` also fakes the layout jsdom does not compute. jsdom reports
 every rect and scroll dimension as zero, so without stubbing, the

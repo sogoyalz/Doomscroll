@@ -11,9 +11,18 @@
 // cannot make exhaustive, and it is also the one whose failure is worst.
 
 import { describe, it, expect } from 'vitest';
-import { CATEGORIES, CHARGED_CATEGORIES, TOPIC_CATEGORIES, isCharged } from '../src/shared/taxonomy.ts';
+import {
+  CATEGORIES,
+  CHARGED_CATEGORIES,
+  TOPIC_CATEGORIES,
+  isCharged,
+} from '../src/shared/taxonomy.ts';
 import { LEXICON, TIE_BREAK_ORDER } from '../src/shared/lexicon.ts';
-import { CATEGORY_COLORS, colorForCategory, UNCLASSIFIED_COLOR } from '../src/shared/palette.ts';
+import {
+  CATEGORY_COLORS,
+  colorForCategory,
+  UNCLASSIFIED_COLOR,
+} from '../src/shared/palette.ts';
 
 /** Every category that can actually be assigned. `neutral` is the absence of one. */
 const NAMABLE = CATEGORIES.filter((c) => c !== 'neutral');

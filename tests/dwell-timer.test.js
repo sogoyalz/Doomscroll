@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createDwellTracker, MIN_DWELL_MS, MAX_DWELL_MS } from '../src/content/detector.ts';
+import { createDwellTracker, MIN_DWELL_MS, MAX_DWELL_MS } from '../src/content/dwell-timer.ts';
 
 // The tracker takes an explicit clock, so these drive time directly rather
 // than using fake timers.

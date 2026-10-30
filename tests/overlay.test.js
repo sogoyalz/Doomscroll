@@ -11,7 +11,9 @@ function shadow() {
 }
 
 function buttonLabelled(match) {
-  return [...(shadow()?.querySelectorAll('button') ?? [])].find((b) => match.test(b.textContent));
+  return [...(shadow()?.querySelectorAll('button') ?? [])].find((b) =>
+    match.test(b.textContent),
+  );
 }
 
 const show = (over = {}) => {
@@ -236,5 +238,107 @@ describe('the break reminder', () => {
     expect(document.querySelectorAll('#doomscroll-overlay')).toHaveLength(1);
     // The interruption is the one on screen, not the reminder.
     expect(shadow().textContent).toContain('locked onto one thing');
+  });
+});
+
+describe('the prompt can be escaped with a keyboard', () => {
+  // role="dialog" + aria-modal="true" are promises. Before this the overlay
+  // kept neither: Escape did nothing, and Tab walked straight out of the
+  // dialog into the Instagram page sitting behind an opaque scrim, where a
+  // keyboard user was operating content they could not see. This is the most
+  // intrusive screen the extension has and the one a user most needs a way
+  // out of.
+  const press = (key, target) =>
+    (target ?? document).dispatchEvent(
+      new KeyboardEvent('keydown', { key, bubbles: true, composed: true }),
+    );
+
+  it('closes on Escape, and reports it the same way the button does', () => {
+    const onDismiss = show();
+    press('Escape');
+    expect(isOverlayShowing()).toBe(false);
+    // Escaping is not accepting. It is the same choice as "keep scrolling".
+    expect(onDismiss).toHaveBeenCalledWith('bypassed');
+  });
+
+  it('holds Escape for as long as the block level withholds its button', () => {
+    // Otherwise Escape is a keyboard bypass of the one rung whose entire
+    // point is the delay, and the block level would be mouse-only friction.
+    const onDismiss = show({ level: 'block' });
+    press('Escape');
+    expect(isOverlayShowing()).toBe(true);
+    expect(onDismiss).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(10_000);
+    press('Escape');
+    expect(isOverlayShowing()).toBe(false);
+    expect(onDismiss).toHaveBeenCalledWith('bypassed');
+  });
+
+  it('keeps Tab inside the dialog', () => {
+    show();
+    const buttons = [...shadow().querySelectorAll('button')];
+    const last = buttons[buttons.length - 1];
+    last.focus();
+
+    press('Tab', last);
+
+    // Wrapped to the first button rather than escaping to the page behind.
+    expect(shadow().activeElement).toBe(buttons[0]);
+  });
+
+  it('wraps backwards too', () => {
+    show();
+    const buttons = [...shadow().querySelectorAll('button')];
+    buttons[0].focus();
+
+    buttons[0].dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Tab',
+        shiftKey: true,
+        bubbles: true,
+        composed: true,
+      }),
+    );
+
+    expect(shadow().activeElement).toBe(buttons[buttons.length - 1]);
+  });
+
+  it('skips the withheld button while it is still disabled', () => {
+    // A focus trap that parks focus on a disabled control is its own trap.
+    show({ level: 'block' });
+    const buttons = [...shadow().querySelectorAll('button')];
+    const take = buttons[0];
+    take.focus();
+
+    press('Tab', take);
+
+    expect(shadow().activeElement).toBe(take);
+  });
+
+  it('stops listening once it is gone', () => {
+    const onDismiss = show();
+    hideOverlay();
+    press('Escape');
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('lets the break reminder go too', () => {
+    const onKeep = vi.fn();
+    const onEnd = vi.fn();
+    showBreakReminder({
+      state: { startedAt: 0, endsAt: 900_000, interventionId: 'i1' },
+      now: 0,
+      onKeep,
+      onEnd,
+    });
+
+    press('Escape');
+
+    expect(isOverlayShowing()).toBe(false);
+    // Escaping a reminder is keeping the break, not ending it — the user
+    // already asked for it, and dismissing a reminder is not a retraction.
+    expect(onKeep).toHaveBeenCalled();
+    expect(onEnd).not.toHaveBeenCalled();
   });
 });

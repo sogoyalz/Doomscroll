@@ -10,7 +10,13 @@
 // worker after ~30s idle — anything held in memory is gone by the time the
 // alarm fires.
 
-import { getAllReelEvents, getDailyAggregates, getReelEvents, putDailyAggregate } from './db.js';
+import {
+  getAllReelEvents,
+  getDailyAggregates,
+  getReelEvents,
+  putDailyAggregate,
+  putDailyAggregates,
+} from './db.js';
 import { aggregateDay, groupByLocalDay } from '@shared/aggregation.js';
 import { localDateKey, localDayRange } from '@shared/time.js';
 import type { DailyAggregate } from '@shared/types.js';
@@ -30,7 +36,9 @@ export async function recomputeDay(dateKey: string, gapMs?: number): Promise<Dai
 async function readDirtyDays(): Promise<string[]> {
   try {
     const { [DIRTY_DAYS_KEY]: stored } = await chrome.storage.local.get(DIRTY_DAYS_KEY);
-    return Array.isArray(stored) ? stored.filter((d): d is string => typeof d === 'string') : [];
+    return Array.isArray(stored)
+      ? stored.filter((d): d is string => typeof d === 'string')
+      : [];
   } catch {
     return [];
   }
@@ -175,4 +183,37 @@ export async function backfillMissingAggregates(gapMs?: number): Promise<string[
     written.push(dateKey);
   }
   return written;
+}
+
+/**
+ * Rebuilds every day that still has events, against the given session gap.
+ *
+ * `sessionGapThresholdMs` is not just a query parameter — it is baked into
+ * `longestBingeMs` when a day is rolled up. Nothing recomputed history when
+ * the user changed it, and only today is ever recomputed on demand, so the
+ * dashboard showed today under the new rule and every previous day under the
+ * old one. On the same five reels a two-minute gap gives a 2m05s longest
+ * binge and a ten-minute gap gives 8m05s, so the chart was comparing days
+ * measured in different units without saying so.
+ *
+ * Distinct from backfillMissingAggregates, which deliberately skips any day
+ * that already has an aggregate — that is what made this unfixable by simply
+ * running the backfill again.
+ *
+ * Days whose events have aged out are left untouched. Their aggregate is all
+ * that survives them, and recomputing one against no events writes a zero
+ * over real history.
+ */
+export async function recomputeAllDays(gapMs?: number): Promise<string[]> {
+  const events = await getAllReelEvents();
+  if (!events.length) return [];
+
+  const byDay = groupByLocalDay(events);
+  // One transaction rather than one per day: a year of history is hundreds of
+  // writes, and an MV3 worker killed partway through would leave the rebuild
+  // half-applied — precisely the mixed-units state this exists to remove.
+  await putDailyAggregates(
+    [...byDay].map(([dateKey, dayEvents]) => aggregateDay(dateKey, dayEvents, gapMs)),
+  );
+  return [...byDay.keys()];
 }

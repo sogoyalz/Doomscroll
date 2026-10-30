@@ -39,6 +39,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   },
 };
 
+export const MINUTE_MS = 60_000;
+
 /**
  * Legal range for every numeric setting, in the units the user edits them in.
  *
@@ -64,6 +66,20 @@ export const SETTING_BOUNDS = {
   patternBaselineMultiplier: { min: 1, max: 10, step: 0.1 },
   /** Edited in minutes; stored as milliseconds. */
   sessionGapMinutes: { min: 1, max: 120, step: 1 },
-} as const;
 
-export const MINUTE_MS = 60_000;
+  // The intervention ladder. Not editable from the options page today, and
+  // bounded anyway: these were the only numbers in the settings object that
+  // reached storage unchecked, and they are the ones that decide how hard the
+  // extension interrupts. A threshold of 0 makes `levelForStreak` return that
+  // rung for a run of length zero, so every single detection fired the
+  // harshest interruption the ladder has.
+  //
+  // Floored at 1 rather than 0 for that reason. The ceiling is generous: a
+  // threshold nobody reaches is a rung switched off, which is a legitimate
+  // thing to want.
+  notifyAfterStreak: { min: 1, max: 100, step: 1 },
+  overlayAfterStreak: { min: 1, max: 100, step: 1 },
+  blockAfterStreak: { min: 1, max: 100, step: 1 },
+  /** Zero is allowed: it means "no cooldown", which is coherent. */
+  blockCooldownMs: { min: 0, max: 24 * 60 * 60_000, step: MINUTE_MS },
+} as const;

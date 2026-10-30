@@ -143,7 +143,7 @@ export interface DetectionLogEntry {
    * data; this field is what makes it cheap to check before building one.
    */
   hourOfDay: number;
-  /** False while the user has intervention switched off. */
+  /** Whether intervention rules allowed an attempt, before delivery was tried. */
   wouldHaveActed: boolean;
 }
 
@@ -162,6 +162,8 @@ export interface InterventionLogEntry {
   at: number;
   sessionId: string;
   level: InterventionLevel;
+  /** Confirmed delivery time. Undefined on legacy rows; null if delivery failed. */
+  deliveredAt?: number | null;
   /** The content pattern that prompted it. Never a claim about the person. */
   category: string | null;
   streak: number;

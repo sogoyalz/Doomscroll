@@ -45,7 +45,7 @@ instagram.com
 │  ├─ dom.ts          find containers; active   │
 │  │                  reel = straddles the      │
 │  │                  viewport midpoint         │
-│  ├─ detector.ts     dwell clock; excludes     │
+│  ├─ dwell-timer.ts     dwell clock; excludes     │
 │  │                  hidden time AND time      │
 │  │                  spent under an overlay    │
 │  ├─ extractor.ts    caption / hashtags /      │

@@ -6,23 +6,16 @@
 // here, which is why each tuning field names the log value that tells you it
 // needs changing.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { send } from '@shared/client.js';
+import type { ExportKind } from '@shared/messages.js';
 import { CHARGED_CATEGORIES } from '@shared/taxonomy.js';
-import { MIN_BASELINE_DAYS } from '@shared/patterns.js';
+import { MIN_BASELINE_DAYS, baselineStatus } from '@shared/patterns.js';
 import { MINUTE_MS, SETTING_BOUNDS } from '@shared/defaults.js';
 import { colorForCategory } from '@shared/palette.js';
-import {
-  formatDuration,
-  formatPercent,
-  formatRatio,
-  formatTimestamp,
-  reasonLabel,
-} from '@shared/format.js';
-import { localDateKey } from '@shared/time.js';
+import { formatDuration, formatPercent } from '@shared/format.js';
 import { readStorageFailure, type StorageFailure } from '@shared/storage-health.js';
 import {
-  fallbackIdentityShare,
   isAudioDark,
   isDrifting,
   isShortcodeDegraded,
@@ -31,12 +24,12 @@ import {
   type ExtractionHealth,
 } from '@shared/health.js';
 import { LEVEL_LABELS, summarizeInterventions } from '@shared/intervene.js';
-import {
-  stackByDay,
-  type AuthorBreakdown,
-  type SessionSummary,
-} from '@shared/insights.js';
+import { stackByDay, type AuthorBreakdown, type SessionSummary } from '@shared/insights.js';
+import { Alerts } from './Alerts.js';
 import { DayStacks } from './DayStacks.js';
+import { DetectionLogPanel } from './DetectionLogPanel.js';
+import { ExtractionHealthPanel } from './ExtractionHealthPanel.js';
+import { TuningPanel } from './TuningPanel.js';
 import { Sessions } from './Sessions.js';
 import type { TuningReport } from '@shared/tuning.js';
 import type {
@@ -76,6 +69,21 @@ export function Options() {
   const [panelsFailed, setPanelsFailed] = useState(0);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Distinct from `error`, which means the page could not load at all. This
+  // one is a button that did not do what it said, on a page that otherwise
+  // still works, so it is reported in place instead of replacing everything.
+  const [actionError, setActionError] = useState<string | null>(null);
+  /** The export being built, for the button's label and disabled state. */
+  const [exporting, setExporting] = useState<ExportKind | null>(null);
+  /**
+   * The same fact, readable synchronously.
+   *
+   * The guard cannot use the state value: a double-click dispatches both
+   * handlers before React re-renders, so the second one closes over the
+   * `null` the first one saw and starts a second full export. Disabling the
+   * button is for the eye; this is what actually stops the work.
+   */
+  const exportingRef = useRef<ExportKind | null>(null);
 
   const load = useCallback(async () => {
     // Settings load on their own, and their failure is the only one that
@@ -107,10 +115,7 @@ export function Options() {
       });
 
     await Promise.all([
-      panel(
-        chrome.permissions.contains({ permissions: ['notifications'] }),
-        setCanNotify,
-      ),
+      panel(chrome.permissions.contains({ permissions: ['notifications'] }), setCanNotify),
       panel(send('GET_DETECTION_LOG', { limit: LOG_LIMIT }), setLog),
       panel(readHealth(), setHealth),
       panel(readStorageFailure(), setWriteFailure),
@@ -126,11 +131,55 @@ export function Options() {
     void load();
   }, [load]);
 
-  const patch = useCallback(async (update: Partial<UserSettings>) => {
-    setSettings((prev) => (prev ? { ...prev, ...update } : prev));
-    await send('UPDATE_SETTINGS', update);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
+  /**
+   * Writes a settings change and adopts whatever was actually stored.
+   *
+   * The reply is the clamped object, not the patch, and the difference is
+   * visible: typing 999 into a field bounded at 100 used to leave 999 on
+   * screen looking saved while detection ran on 100. Applied optimistically
+   * first so the control still responds at typing speed.
+   *
+   * A failure has to be shown. The service worker is torn down after ~30s
+   * idle and a send can genuinely fail; silently keeping the optimistic value
+   * would leave the page reporting a setting that was never written.
+   */
+  const patch = useCallback(
+    async (update: Partial<UserSettings>) => {
+      setSettings((prev) => (prev ? { ...prev, ...update } : prev));
+      try {
+        setSettings(await send('UPDATE_SETTINGS', update));
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1500);
+      } catch (err) {
+        setActionError(`Couldn’t save that setting. ${String(err)}`);
+        // Back to what is actually stored, so the page stops showing a value
+        // that only ever existed in this tab.
+        void load();
+      }
+    },
+    [load],
+  );
+
+  /**
+   * Runs one export and hands the file to the browser.
+   *
+   * Guarded against a second click while the first is still reading: these
+   * walk the whole history, and a double-click used to run two full exports
+   * and save the same file twice.
+   */
+  const exportCsv = useCallback(async (which: ExportKind) => {
+    if (exportingRef.current) return;
+    exportingRef.current = which;
+    setExporting(which);
+    try {
+      const { filename, csv } = await send('EXPORT_DATA', { which });
+      download(filename, csv);
+    } catch (err) {
+      setActionError(`Couldn’t build that export. ${String(err)}`);
+    } finally {
+      exportingRef.current = null;
+      setExporting(null);
+    }
   }, []);
 
   /**
@@ -165,9 +214,9 @@ export function Options() {
   // retires itself the moment there is history and there is no "dismissed"
   // flag to go stale.
   const brandNew = panelsFailed === 0 && log.length === 0 && daily.length === 0;
-  const baselineReady = log.some((e) => e.reason !== 'insufficient-history');
-  const daysSeen = new Set(log.map((e) => localDateKey(e.at))).size;
-  const flagged = log.filter((e) => e.detected).length;
+  const readiness = baselineStatus(daily);
+  const baselineReady = readiness.ready;
+  const daysSeen = readiness.days;
   const drifting = health ? isDrifting(health) : false;
   const shortcodeDegraded = health ? isShortcodeDegraded(health) : false;
   const audioDark = health ? isAudioDark(health) : false;
@@ -185,99 +234,21 @@ export function Options() {
         </p>
       </header>
 
-      {brandNew && (
-        <div className="alert info welcome">
-          <h2>You&rsquo;re set up. There&rsquo;s nothing else to do.</h2>
-          <p>
-            Go and use Instagram the way you normally would — this watches the Reels you
-            actually stop on and works out what they have in common. Everything stays on this
-            machine.
-          </p>
-          <p>
-            It will look idle for about a week, and that is the design. It flags a category
-            only when it runs well above <em>your own</em> usual rate for it, so it needs to
-            learn your usual rate first. A fixed threshold would spend that week accusing you
-            of a problem it had no way to measure.
-          </p>
-          <p>
-            Nothing will interrupt you unless you switch it on below, and that switch stays
-            disabled until the baseline exists. Come back in a few days and the popup will
-            show how far along it is.
-          </p>
-        </div>
-      )}
-
-      {writeFailure && (
-        <div className="alert danger">
-          <h2>Reels aren&rsquo;t being saved</h2>
-          <p>
-            A write to the local database failed at {formatTimestamp(writeFailure.at)}. The
-            usual causes are a full disk or site data blocked for this Chrome profile.
-            Watching carries on and saving resumes by itself once writes succeed again, but
-            reels watched in the meantime are lost, and every number on this page is stale
-            until then.
-          </p>
-          <p className="fine">{writeFailure.message}</p>
-        </div>
-      )}
-
-      {drifting && health && (
-        <div className="alert danger">
-          <h2>Tracking is probably broken</h2>
-          <p>
-            The creator name couldn&rsquo;t be read on{' '}
-            {formatPercent(health.missingAuthor / health.samples)} of recent reels. That field
-            is on every real reel, so Instagram has most likely changed its page layout and
-            the extension needs updating. Treat the numbers below as unreliable.
-          </p>
-        </div>
-      )}
-
-      {!drifting && shortcodeDegraded && health && (
-        <div className="alert danger">
-          <h2>Reels aren&rsquo;t being identified reliably</h2>
-          <p>
-            {health.bridgeStatus === 'no-fiber'
-              ? 'Instagram no longer exposes the internals the extension reads a reel’s ID from.'
-              : `The reel ID couldn’t be read on ${formatPercent(
-                  fallbackIdentityShare(health),
-                )} of recent reels.`}{' '}
-            Watch time is still being recorded, but reels are being identified by creator and
-            video filename instead — which stops matching once Instagram rotates its video
-            URLs, so the same reel can be counted twice. The extension needs updating.
-          </p>
-        </div>
-      )}
-
-      {!drifting && !shortcodeDegraded && audioDark && health && (
-        <div className="alert danger">
-          <h2>Audio isn&rsquo;t being read</h2>
-          <p>
-            The song/audio name resolved on almost none of your recent reels
-            ({formatPercent(1 - health.missingAudio / health.samples)}). Most reels use
-            licensed audio, so this points to a broken audio selector rather than the reels
-            genuinely lacking it — and audio is a real signal for mood. The extraction code
-            needs updating against Instagram&rsquo;s current layout.
-          </p>
-        </div>
-      )}
-
-      {!drifting && !shortcodeDegraded && !audioDark && textless > 0.6 && (
-        <div className="alert info">
-          <h2>Most of your reels have no text</h2>
-          <p>
-            {formatPercent(textless)} carried no caption, hashtags, or audio name, so they
-            can&rsquo;t be categorised. Text is the only signal available — this is a limit of
-            the approach, not a fault.
-          </p>
-        </div>
-      )}
+      <Alerts
+        brandNew={brandNew}
+        writeFailure={writeFailure}
+        health={health}
+        drifting={drifting}
+        shortcodeDegraded={shortcodeDegraded}
+        audioDark={audioDark}
+        textless={textless}
+      />
 
       <section className="section">
         <h2 className="section-label">Tracking</h2>
         <p className="section-note">
-          When off, nothing is observed or recorded at all — the extension stops watching
-          the page. Your existing history is kept.
+          When off, nothing is observed or recorded at all — the extension stops watching the
+          page. Your existing history is kept.
         </p>
         <label className="toggle">
           <input
@@ -307,72 +278,21 @@ export function Options() {
         </label>
       </section>
 
-      {health && health.samples > 0 && (
-        <section className="section">
-          <h2 className="section-label">Extraction health</h2>
-          <p className="section-note">
-            What the extension managed to read from your last {health.samples} reels. Captions,
-            hashtags, and audio are all legitimately missing sometimes; the creator name and
-            the reel ID are not, so those two are the ones worth watching.
-          </p>
-          <table className="log">
-            <tbody>
-              <tr>
-                <td>Reel ID resolved</td>
-                <td>{formatPercent(1 - fallbackIdentityShare(health))}</td>
-              </tr>
-              <tr>
-                <td>Creator name resolved</td>
-                <td>{formatPercent(1 - health.missingAuthor / health.samples)}</td>
-              </tr>
-              <tr>
-                <td>Some readable text</td>
-                <td>{formatPercent(1 - textless)}</td>
-              </tr>
-              <tr>
-                <td>Audio name resolved</td>
-                <td>{formatPercent(1 - health.missingAudio / health.samples)}</td>
-              </tr>
-              <tr>
-                <td>Audio read via</td>
-                <td>
-                  {Object.entries(health.audioChannels).length
-                    ? Object.entries(health.audioChannels)
-                        .sort(([, a], [, b]) => b - a)
-                        .map(([channel, count]) => `${channel} (${count})`)
-                        .join(', ')
-                    : 'nothing matched'}
-                </td>
-              </tr>
-              <tr>
-                <td>Page bridge</td>
-                <td>
-                  {health.bridgeStatus === 'ok'
-                    ? 'working'
-                    : health.bridgeStatus === 'no-fiber'
-                      ? 'ran, but found nothing to read'
-                      : 'not seen yet'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-      )}
+      <ExtractionHealthPanel health={health} />
 
       <section className="section">
         <h2 className="section-label">Interventions</h2>
         <p className="section-note">
-          Detection runs either way. With this off, results only go to the log below — which
-          is how the first week is best spent.
+          Detection runs either way. With this off, results only go to the log below — which is
+          how the first week is best spent.
         </p>
 
         {!baselineReady && (
           <div className="gate">
             <strong>Not available yet.</strong> Detection measures against your own normal,
             which needs roughly {MIN_BASELINE_DAYS} days of history to exist. Until then it
-            refuses to guess rather than falling back on a fixed rule that would flag
-            perfectly ordinary scrolling. {daysSeen} day{daysSeen === 1 ? '' : 's'} recorded
-            so far.
+            refuses to guess rather than falling back on a fixed rule that would flag perfectly
+            ordinary scrolling. {daysSeen} day{daysSeen === 1 ? '' : 's'} recorded so far.
           </div>
         )}
 
@@ -399,26 +319,22 @@ export function Options() {
 
       {interventions.length > 0 && (
         <section className="section">
-          <h2 className="section-label">Did interrupting help?</h2>
+          <h2 className="section-label">Intervention history</h2>
           <p className="section-note">
-            A tool that interrupts you has no business assuming the answer. If most of these
-            were dismissed and the scrolling carried on regardless, the interruption is costing
-            you attention and buying nothing — turn it off, or raise the thresholds.{' '}
-            <strong>Breaks held</strong> is the closest thing here to a record of what
-            happened rather than which button you pressed: taking a break leaves the feed, and
-            a break only stops counting as held if you choose to end it early. Bouncing off
-            the reminder and carrying on with the break still counts as held — as does closing
-            the tab on it, which is the gap in this number worth knowing about.
+            These counts record intervention decisions and your responses. A decision may not
+            have reached the page. “No early end recorded” means this extension did not receive
+            a request to end the break early; it does not prove you stopped scrolling or measure
+            activity on another device. These numbers do not establish effectiveness.
           </p>
           <table className="log">
             <thead>
               <tr>
                 <th>Level</th>
-                <th className="num">Shown</th>
+                <th className="num">Decisions</th>
                 <th className="num">Took a break</th>
-                <th className="num">Kept scrolling</th>
-                <th className="num">No answer</th>
-                <th className="num">Breaks held</th>
+                <th className="num">Dismissed</th>
+                <th className="num">No recorded response</th>
+                <th className="num">No early end recorded</th>
               </tr>
             </thead>
             <tbody>
@@ -450,10 +366,13 @@ export function Options() {
 
         <div className="field">
           <div>
-            <div className="field-name">Recent window</div>
+            <label className="field-name" htmlFor="window-size">
+              Recent window
+            </label>
             <div className="field-hint">How many of your latest reels are examined.</div>
           </div>
           <input
+            id="window-size"
             type="number"
             min={SETTING_BOUNDS.patternWindowSize.min}
             max={SETTING_BOUNDS.patternWindowSize.max}
@@ -464,13 +383,16 @@ export function Options() {
 
         <div className="field">
           <div>
-            <div className="field-name">Dominance</div>
+            <label className="field-name" htmlFor="dominance">
+              Dominance
+            </label>
             <div className="field-hint">
               Share of that window one category must hold. Raise it if the log rarely says
               &ldquo;no single category dominated&rdquo;.
             </div>
           </div>
           <input
+            id="dominance"
             type="number"
             min={SETTING_BOUNDS.patternDominantThreshold.min}
             max={SETTING_BOUNDS.patternDominantThreshold.max}
@@ -482,13 +404,16 @@ export function Options() {
 
         <div className="field">
           <div>
-            <div className="field-name">Above normal</div>
+            <label className="field-name" htmlFor="above-normal">
+              Above normal
+            </label>
             <div className="field-hint">
-              How many times your own trailing rate it must exceed. Lower it if the log is
-              full of &ldquo;normal for you&rdquo;.
+              How many times your own trailing rate it must exceed. Lower it if the log is full
+              of &ldquo;normal for you&rdquo;.
             </div>
           </div>
           <input
+            id="above-normal"
             type="number"
             min={SETTING_BOUNDS.patternBaselineMultiplier.min}
             max={SETTING_BOUNDS.patternBaselineMultiplier.max}
@@ -500,16 +425,21 @@ export function Options() {
 
         <div className="field">
           <div>
-            <div className="field-name">Session gap</div>
+            <label className="field-name" htmlFor="session-gap">
+              Session gap
+            </label>
             <div className="field-hint">Minutes away before a new session starts.</div>
           </div>
           <input
+            id="session-gap"
             type="number"
             min={SETTING_BOUNDS.sessionGapMinutes.min}
             max={SETTING_BOUNDS.sessionGapMinutes.max}
             value={Math.round(settings.sessionGapThresholdMs / MINUTE_MS)}
             onChange={(e) =>
-              void patch({ sessionGapThresholdMs: Number(e.target.value) * MINUTE_MS })
+              void patch({
+                sessionGapThresholdMs: Number(e.target.value) * MINUTE_MS,
+              })
             }
           />
         </div>
@@ -518,8 +448,8 @@ export function Options() {
       <section className="section">
         <h2 className="section-label">Categories worth flagging</h2>
         <p className="section-note">
-          Only these can trigger an intervention. Being shown a lot of joyful content is not
-          a problem worth interrupting.
+          Only these can trigger an intervention. Being shown a lot of joyful content is not a
+          problem worth interrupting.
         </p>
         <div className="chips">
           {CHARGED_CATEGORIES.map((category) => {
@@ -545,136 +475,19 @@ export function Options() {
         </div>
       </section>
 
-      {tuning && tuning.neutralReels > 0 && (
-        <section className="section">
-          <h2 className="section-label">Why so much neutral</h2>
-          <p className="section-note">
-            {tuning.neutralReels} of {tuning.totalReels} reels had readable text that matched
-            nothing in the word list. These are the terms that came up most often in them.
-            If they look like feelings, they are worth adding to{' '}
-            <code>src/shared/lexicon.ts</code>. If they look like recipes, cricket, or
-            product names, the feed genuinely is not emotional and neutral is the right
-            answer.
-          </p>
+      <TuningPanel tuning={tuning} />
 
-          <div className="terms">
-            <div>
-              <h3 className="terms-label">Hashtags</h3>
-              {tuning.topHashtags.length === 0 ? (
-                <p className="empty">None.</p>
-              ) : (
-                <ul className="term-list">
-                  {tuning.topHashtags.map(({ term, count }) => (
-                    <li key={term}>
-                      <span>#{term}</span>
-                      <span className="term-count">{count}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div>
-              <h3 className="terms-label">Words</h3>
-              {tuning.topWords.length === 0 ? (
-                <p className="empty">None.</p>
-              ) : (
-                <ul className="term-list">
-                  {tuning.topWords.map(({ term, count }) => (
-                    <li key={term}>
-                      <span>{term}</span>
-                      <span className="term-count">{count}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-
-          {tuning.sampleCaptions.length > 0 && (
-            <>
-              <h3 className="terms-label" style={{ marginTop: 22 }}>
-                Captions that matched nothing
-              </h3>
-              <ul className="samples">
-                {tuning.sampleCaptions.map((caption, i) => (
-                  <li key={i}>{caption}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
-      )}
-
-      <section className="section">
-        <h2 className="section-label">Detection log</h2>
-        <p className="section-note">
-          Every check, including the ones that didn&rsquo;t fire — those are the useful half. An
-          unbroken run of the same outcome is collapsed into one row; &ldquo;checks&rdquo; is how
-          many reels it held for. &ldquo;Normal&rdquo; is your own rate over the last fortnight,
-          weighted toward recent days; &ldquo;usual&rdquo; is the same thing over two months. When
-          those two disagree, your feed has shifted recently.
-          {flagged > 0
-            ? ` ${flagged} of the last ${log.length} would have interrupted you.`
-            : ' Nothing would have interrupted you yet.'}
-        </p>
-
-        {log.length === 0 ? (
-          <p className="empty">No checks recorded yet. Scroll some reels and come back.</p>
-        ) : (
-          <div className="scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>When</th>
-                  <th>Category</th>
-                  <th className="num">Share</th>
-                  <th className="num">Normal</th>
-                  <th className="num">Usual</th>
-                  <th className="num">Ratio</th>
-                  <th className="num">Run</th>
-                  <th className="num">Checks</th>
-                  <th>Outcome</th>
-                </tr>
-              </thead>
-              <tbody>
-                {log.map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="when">{formatTimestamp(entry.at)}</td>
-                    <td className="cat">{entry.category ?? '—'}</td>
-                    <td className="num">{entry.category ? formatPercent(entry.share) : '—'}</td>
-                    <td className="num">
-                      {entry.category ? formatPercent(entry.baselineShare) : '—'}
-                    </td>
-                    <td className="num">
-                      {entry.category && entry.baselineShareLong !== undefined
-                        ? formatPercent(entry.baselineShareLong)
-                        : '—'}
-                    </td>
-                    <td className="num">{entry.category ? formatRatio(entry.ratio) : '—'}</td>
-                    <td className="num">{entry.streak || '—'}</td>
-                    <td className="num">{entry.occurrences ?? 1}</td>
-                    <td>
-                      <span className={`outcome${entry.detected ? ' hit' : ''}`}>
-                        {reasonLabel(entry.reason)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <DetectionLogPanel log={log} />
 
       {daily.length >= 3 && (
         <section className="section">
           <h2 className="section-label">What each day was made of</h2>
           <p className="section-note">
             One bar per day, scaled to the same height so the mix is comparable — a day you
-            barely opened Instagram is dimmed, since three reels should not read as
-            confidently as three hundred. The thirteen topic categories are pooled into one
-            band: they are context, not the finding, and twenty-one colours in a bar this size
-            is a texture rather than a chart. Hover a bar for the counts.
+            barely opened Instagram is dimmed, since three reels should not read as confidently
+            as three hundred. The thirteen topic categories are pooled into one band: they are
+            context, not the finding, and twenty-one colours in a bar this size is a texture
+            rather than a chart. Hover a bar for the counts.
           </p>
           <DayStacks days={stackByDay(daily)} />
         </section>
@@ -702,7 +515,8 @@ export function Options() {
             {authors.unattributed > 0 && (
               <>
                 {' '}
-                {authors.unattributed} older reel{authors.unattributed === 1 ? '' : 's'}{' '}
+                {authors.unattributed} older reel
+                {authors.unattributed === 1 ? '' : 's'}{' '}
                 {authors.unattributed === 1 ? 'is' : 'are'} missing from this — creator names
                 were only recorded from a later version onward, so long-standing creators are
                 understated here.
@@ -744,47 +558,45 @@ export function Options() {
         <div className="row">
           <button
             className="action"
-            onClick={() =>
-              void send('EXPORT_DATA', {}).then(({ reelsCsv }) =>
-                download('doomscroll-reels.csv', reelsCsv),
-              )
-            }
+            disabled={exporting !== null}
+            onClick={() => void exportCsv('reels')}
           >
-            Export reels
+            {exporting === 'reels' ? 'Building\u2026' : 'Export reels'}
           </button>
           <button
             className="action"
-            onClick={() =>
-              void send('EXPORT_DATA', {}).then(({ detectionCsv }) =>
-                download('doomscroll-detection-log.csv', detectionCsv),
-              )
-            }
+            disabled={exporting !== null}
+            onClick={() => void exportCsv('detection')}
           >
-            Export detection log
+            {exporting === 'detection' ? 'Building\u2026' : 'Export detection log'}
           </button>
           {interventions.length > 0 && (
             <button
               className="action"
-              onClick={() =>
-                void send('EXPORT_DATA', {}).then(({ interventionsCsv }) =>
-                  download('doomscroll-interventions.csv', interventionsCsv),
-                )
-              }
+              disabled={exporting !== null}
+              onClick={() => void exportCsv('interventions')}
             >
-              Export interruptions
+              {exporting === 'interventions' ? 'Building\u2026' : 'Export interruptions'}
             </button>
           )}
           <button
             className="action danger"
             onClick={() => {
               if (!confirm('Delete all tracked history? Settings are kept.')) return;
-              void send('CLEAR_DATA', {}).then(() => load());
+              // Reported rather than swallowed: this is the one button whose
+              // silent failure leaves someone believing their history is gone.
+              void send('CLEAR_DATA', {})
+                .then(() => load())
+                .catch((err: unknown) => {
+                  setActionError(`Your history was not deleted. ${String(err)}`);
+                });
             }}
           >
             Delete history
           </button>
           {saved && <span className="saved">Saved</span>}
         </div>
+        {actionError && <p className="action-error">{actionError}</p>}
       </section>
     </div>
   );

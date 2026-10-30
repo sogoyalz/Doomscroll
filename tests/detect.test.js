@@ -12,7 +12,14 @@ import { MIN_BASELINE_DAYS } from '../src/shared/patterns.ts';
 import { localDateKey, startOfLocalDayBefore } from '../src/shared/time.ts';
 
 globalThis.chrome = {
-  storage: { local: { async get() { return {}; }, async set() {} } },
+  storage: {
+    local: {
+      async get() {
+        return {};
+      },
+      async set() {},
+    },
+  },
 };
 
 const NOW = new Date(2026, 7, 20, 15, 0, 0).getTime();

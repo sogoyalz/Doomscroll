@@ -12,7 +12,7 @@
 // is for: a run of twelve reels should look like twelve cells regardless of
 // how long each was held.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { send } from '@shared/client.js';
 import { formatDuration, formatTimestamp } from '@shared/format.js';
 import { colorForCategory, UNCLASSIFIED_COLOR } from '@shared/palette.js';
@@ -61,32 +61,54 @@ export function Sessions({ sessions }: Props) {
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const toggle = useCallback(
-    async (id: string) => {
-      if (openId === id) {
-        setOpenId(null);
-        setReels([]);
-        return;
-      }
-      // Fetched on expand rather than up front: a month of sessions is
-      // thousands of reels, and almost none of them are ever looked at.
-      setOpenId(id);
-      setLoading(true);
-      setFailed(false);
+  /**
+   * Which session the strip is currently for, readable synchronously.
+   *
+   * Not the same as `openId`. The state value inside an async handler is the
+   * one captured when the click happened, so a second expand could not tell
+   * that it had been superseded — whichever fetch resolved LAST won, and
+   * sessions differ enough in size that reads genuinely finish out of order.
+   * Expanding a long session and then a short one left the short one open
+   * displaying the long one's reels, silently and with no error.
+   *
+   * That is the worst place in the UI for it. This view exists to answer
+   * "was the detection log right about this session", so showing a different
+   * session's reels answers confidently about the wrong thing.
+   */
+  const wantedId = useRef<string | null>(null);
+
+  const toggle = useCallback(async (id: string) => {
+    if (wantedId.current === id) {
+      wantedId.current = null;
+      setOpenId(null);
       setReels([]);
-      try {
-        setReels(await send('GET_SESSION_REELS', { sessionId: id }));
-      } catch {
-        // Without this the strip renders empty under a note explaining how to
-        // read it, which says "this session had no reels" — a claim about the
-        // data rather than about the fetch that failed.
-        setFailed(true);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [openId],
-  );
+      return;
+    }
+    // Fetched on expand rather than up front: a month of sessions is
+    // thousands of reels, and almost none of them are ever looked at.
+    wantedId.current = id;
+    setOpenId(id);
+    setLoading(true);
+    setFailed(false);
+    setReels([]);
+    try {
+      const fetched = await send('GET_SESSION_REELS', { sessionId: id });
+      // Superseded while in flight. Drop it: the row it belongs to is closed,
+      // and the open row is either already filled or still loading its own.
+      if (wantedId.current !== id) return;
+      setReels(fetched);
+    } catch {
+      if (wantedId.current !== id) return;
+      // Without this the strip renders empty under a note explaining how to
+      // read it, which says "this session had no reels" — a claim about the
+      // data rather than about the fetch that failed.
+      setFailed(true);
+    } finally {
+      // Guarded too: a slow loser resolving after the winner must not clear
+      // the spinner the winner is still showing.
+      if (wantedId.current === id) setLoading(false);
+    }
+  }, []);
 
   return (
     <div className="sessions">

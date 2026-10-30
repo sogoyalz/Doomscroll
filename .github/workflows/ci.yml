@@ -8,32 +8,38 @@ on:
     branches: ['**']
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   check:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - run: npx playwright install --with-deps chromium
       # Also exercises the packaging checks: icons present, both content
       # scripts emitted, the MAIN-world script still registered.
       - run: npm run package
+      - run: npm run test:browser
 
   audit:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
-      # Shipping code only. Dev-tool advisories are noise for an extension
-      # that ships no dev dependencies to users.
-      - run: npm audit --omit=dev --audit-level=moderate
+      # Both shipping code and the tools used to build and test it.
+      - run: npm audit --audit-level=moderate

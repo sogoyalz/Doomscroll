@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { send } from '@shared/client.js';
 import { UNCLASSIFIED } from '@shared/aggregation.js';
 import { isCharged } from '@shared/taxonomy.js';
-import { MIN_BASELINE_DAYS } from '@shared/patterns.js';
+import { MIN_BASELINE_DAYS, baselineStatus } from '@shared/patterns.js';
 import { colorForCategory, UNCLASSIFIED_COLOR } from '@shared/palette.js';
 import {
   chargedShareByDay,
@@ -25,7 +25,6 @@ import {
   type ExtractionHealth,
 } from '@shared/health.js';
 import { formatDuration, formatPace, formatPercent } from '@shared/format.js';
-import { localDateKey } from '@shared/time.js';
 import { readStorageFailure } from '@shared/storage-health.js';
 import type { DailyAggregate } from '@shared/types.js';
 import './popup.css';
@@ -76,7 +75,11 @@ function summarize(days: DailyAggregate[]): Totals {
   };
 
   const slices = Object.entries(counts)
-    .map(([category, count]) => ({ category, count, share: reels ? count / reels : 0 }))
+    .map(([category, count]) => ({
+      category,
+      count,
+      share: reels ? count / reels : 0,
+    }))
     .sort((a, b) => rankOf(a.category) - rankOf(b.category) || b.count - a.count);
 
   return {
@@ -136,11 +139,6 @@ function describeTrend(days: DayShare[]): string {
     : `Your feed has been serving less of it lately — down ${formatPercent(-move)} on the first half of the period.`;
 }
 
-/** Days with activity, excluding today — which the baseline ignores. */
-function baselineDaysAvailable(days: DailyAggregate[], todayKey: string): number {
-  return days.filter((d) => d.date !== todayKey && d.totalReels > 0).length;
-}
-
 export function Popup() {
   const [range, setRange] = useState<Range>('today');
   const [days, setDays] = useState<DailyAggregate[] | null>(null);
@@ -149,6 +147,8 @@ export function Popup() {
   const [tracking, setTracking] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [writeFailed, setWriteFailed] = useState(false);
+  /** A control that did not do what it said, on a popup that still works. */
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -170,10 +170,25 @@ export function Popup() {
     }
   }, [range]);
 
+  /**
+   * Flips tracking, and puts the switch back if the write did not land.
+   *
+   * This is the one control that must never lie. MV3 tears the service worker
+   * down after ~30s idle and the send can genuinely fail, and an optimistic
+   * flip with no rollback left the switch reading "paused" while the content
+   * script went on recording — the worst failure this extension has, on the
+   * button whose entire job is stopping it.
+   */
   const toggleTracking = useCallback(async () => {
     const next = !tracking;
     setTracking(next);
-    await send('UPDATE_SETTINGS', { trackingEnabled: next });
+    try {
+      setTracking((await send('UPDATE_SETTINGS', { trackingEnabled: next })).trackingEnabled);
+      setActionError(null);
+    } catch {
+      setTracking(!next);
+      setActionError(next ? 'Couldn’t resume tracking.' : 'Couldn’t pause tracking.');
+    }
   }, [tracking]);
 
   useEffect(() => {
@@ -192,11 +207,10 @@ export function Popup() {
   if (!days) return <div className="state">Loading</div>;
 
   const totals = summarize(days);
-  // Must use the same helper that produced the stored `date` values, not a
-  // locale-formatted lookalike — this key is compared against them.
-  const todayKey = localDateKey(Date.now());
-  const readyDays = baselineDaysAvailable(history, todayKey);
-  const baselineReady = readyDays >= MIN_BASELINE_DAYS;
+  // Match the detector's horizon, activity-day guard, and charged sample guard.
+  const readiness = baselineStatus(history);
+  const readyDays = readiness.days;
+  const baselineReady = readiness.ready;
   // Two different breakages, one banner: from the popup's point of view both
   // mean "the numbers below are unreliable, go read Settings". Which one it is
   // matters when fixing it, and that detail lives in the Options alerts.
@@ -243,8 +257,8 @@ export function Popup() {
         <div className="state alarm">
           <strong>Reels aren&rsquo;t being saved</strong>
           The last one couldn&rsquo;t be written to storage — usually a full disk, or site data
-          blocked for this profile. Watching continues and saving resumes on its own once
-          there is room; nothing below is up to date until then.
+          blocked for this profile. Watching continues and saving resumes on its own once there
+          is room; nothing below is up to date until then.
         </div>
       )}
 
@@ -284,7 +298,9 @@ export function Popup() {
                   style={{
                     width: `${share * 100}%`,
                     background:
-                      category === UNCLASSIFIED ? UNCLASSIFIED_COLOR : colorForCategory(category),
+                      category === UNCLASSIFIED
+                        ? UNCLASSIFIED_COLOR
+                        : colorForCategory(category),
                   }}
                 />
               ))}
@@ -317,8 +333,7 @@ export function Popup() {
               <TrendChart days={trend} />
               <p className="trend-note">
                 Share of readable reels carrying an emotional register, per day over the last{' '}
-                {trend.length} days.{' '}
-                {describeTrend(trend)}
+                {trend.length} days. {describeTrend(trend)}
               </p>
             </section>
           )}
@@ -329,7 +344,13 @@ export function Popup() {
         <div className="strip-head">
           <span className="strip-label">Pattern detection</span>
           <span className="strip-value">
-            {degraded ? 'needs attention' : baselineReady ? 'watching' : `${readyDays}/${MIN_BASELINE_DAYS} days`}
+            {degraded
+              ? 'needs attention'
+              : baselineReady
+                ? 'watching'
+                : readyDays < MIN_BASELINE_DAYS
+                  ? `${readyDays}/${MIN_BASELINE_DAYS} days`
+                  : 'more readable history needed'}
           </span>
         </div>
 
@@ -349,6 +370,8 @@ export function Popup() {
               : 'Compares against your own normal, so it needs a week of history first.'}
         </p>
       </section>
+
+      {actionError && <p className="action-error">{actionError}</p>}
 
       <footer className="foot">
         <button className="link" onClick={() => chrome.runtime.openOptionsPage()}>

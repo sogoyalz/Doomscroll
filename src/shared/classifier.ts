@@ -168,8 +168,8 @@ function scoreCategory(category: ClassifiableCategory, input: ClassifierInput): 
 export function hasSignal(input: ClassifierInput): boolean {
   return Boolean(
     normalize(input.captionText ?? '') ||
-      normalize(input.audioName ?? '') ||
-      input.hashtags.length,
+    normalize(input.audioName ?? '') ||
+    input.hashtags.length,
   );
 }
 

@@ -178,7 +178,7 @@ which is most of Instagram.
 
 ## 4. Timing a view
 
-`content/detector.ts` is a pure state machine — no DOM, no clock of its own,
+`content/dwell-timer.ts` is a pure state machine — no DOM, no clock of its own,
 driven entirely by explicit `setActive` / `pause` / `resume` / `flush` calls.
 That is what makes it unit-testable.
 
@@ -284,7 +284,7 @@ guarantee can be absolute.
 
 ## 6. Storage
 
-### IndexedDB — `doomscroll`, version 4
+### IndexedDB — `doomscroll`, version 5
 
 | Store | Key | Indexes | Holds |
 |---|---|---|---|

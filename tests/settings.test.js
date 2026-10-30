@@ -2,6 +2,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { getSettings, updateSettings } from '../src/shared/settings.ts';
 import { DEFAULT_SETTINGS, MINUTE_MS, SETTING_BOUNDS } from '../src/shared/defaults.ts';
 import { MIN_WINDOW_SAMPLE } from '../src/shared/patterns.ts';
+import { levelForStreak } from '../src/shared/intervene.ts';
+
+it('preserves independent settings when two pages save concurrently', async () => {
+  await Promise.all([
+    updateSettings({ trackingEnabled: false }),
+    updateSettings({ patternWindowSize: 25 }),
+  ]);
+  expect(await getSettings()).toMatchObject({ trackingEnabled: false, patternWindowSize: 25 });
+});
 
 // Minimal chrome.storage.local stand-in — enough surface for these two
 // functions, without pulling in a full extension-API mock.
@@ -233,5 +242,68 @@ describe('the bounds and the detector agree', () => {
     expect(s.patternDominantThreshold).toBe(DEFAULT_SETTINGS.patternDominantThreshold);
     expect(s.patternBaselineMultiplier).toBe(DEFAULT_SETTINGS.patternBaselineMultiplier);
     expect(s.sessionGapThresholdMs).toBe(DEFAULT_SETTINGS.sessionGapThresholdMs);
+  });
+});
+
+describe('the intervention thresholds are validated too', () => {
+  // These four were the only numbers in the settings object that mergeSettings
+  // let through unchecked — a plain spread, no clamp — and they are the ones
+  // that decide how hard the extension interrupts you. A zero block threshold
+  // made levelForStreak return 'block' for a run of length zero, so every
+  // detection went straight to the harshest rung.
+  it('refuses a zero block threshold', async () => {
+    const s = await updateSettings({ interventionLevels: { blockAfterStreak: 0 } });
+    expect(s.interventionLevels.blockAfterStreak).toBeGreaterThanOrEqual(1);
+    expect(levelForStreak(0, s.interventionLevels)).toBe(null);
+  });
+
+  it('refuses a negative cooldown', async () => {
+    const s = await updateSettings({ interventionLevels: { blockCooldownMs: -1 } });
+    expect(s.interventionLevels.blockCooldownMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('falls back to the default when the value is not a number', async () => {
+    const s = await updateSettings({ interventionLevels: { notifyAfterStreak: 'lots' } });
+    expect(s.interventionLevels.notifyAfterStreak).toBe(
+      DEFAULT_SETTINGS.interventionLevels.notifyAfterStreak,
+    );
+  });
+
+  it('rounds a fractional streak threshold', async () => {
+    // Streaks are whole reels, so a threshold of 5.5 can never be met exactly
+    // and reads as a typo rather than an intent.
+    const s = await updateSettings({ interventionLevels: { notifyAfterStreak: 5.5 } });
+    expect(Number.isInteger(s.interventionLevels.notifyAfterStreak)).toBe(true);
+  });
+
+  it('keeps the ladder ordered when a threshold would invert it', async () => {
+    // notify above block is not a stricter setting, it is an unreachable
+    // rung: levelForStreak checks block first, so any run long enough to
+    // notify has already returned block and notify can never fire.
+    const s = await updateSettings({
+      interventionLevels: { notifyAfterStreak: 30, blockAfterStreak: 10 },
+    });
+    const { notifyAfterStreak, overlayAfterStreak, blockAfterStreak } = s.interventionLevels;
+    expect(notifyAfterStreak).toBeLessThanOrEqual(overlayAfterStreak);
+    expect(overlayAfterStreak).toBeLessThanOrEqual(blockAfterStreak);
+  });
+
+  it('leaves a sane ladder exactly as written', async () => {
+    const s = await updateSettings({
+      interventionLevels: { notifyAfterStreak: 4, overlayAfterStreak: 8, blockAfterStreak: 16 },
+    });
+    expect(s.interventionLevels).toMatchObject({
+      notifyAfterStreak: 4,
+      overlayAfterStreak: 8,
+      blockAfterStreak: 16,
+    });
+  });
+
+  it('still lets one threshold be patched without dropping the others', async () => {
+    const s = await updateSettings({ interventionLevels: { notifyAfterStreak: 6 } });
+    expect(s.interventionLevels.notifyAfterStreak).toBe(6);
+    expect(s.interventionLevels.blockCooldownMs).toBe(
+      DEFAULT_SETTINGS.interventionLevels.blockCooldownMs,
+    );
   });
 });

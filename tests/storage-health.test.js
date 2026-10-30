@@ -71,6 +71,15 @@ describe('recording a failure', () => {
 });
 
 describe('clearing on recovery', () => {
+  it('retries clearing a stale banner after local storage recovers', async () => {
+    await noteStorageFailure(new Error('full'), NOW);
+    failStorage = true;
+    await noteStorageWorking();
+    failStorage = false;
+    expect(await readStorageFailure()).not.toBeNull();
+    await noteStorageWorking();
+    expect(await readStorageFailure()).toBeNull();
+  });
   it('clears the failure once a write succeeds', async () => {
     await noteStorageFailure(new Error('full'), NOW);
     await noteStorageWorking();

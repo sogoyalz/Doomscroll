@@ -32,8 +32,8 @@ describe('findReelContainers', () => {
   });
 
   it('returns containers in DOM order', () => {
-    const handles = findReelContainers().map(
-      (c) => c.querySelector(AUTHOR_LINK_SELECTOR)?.getAttribute('aria-label'),
+    const handles = findReelContainers().map((c) =>
+      c.querySelector(AUTHOR_LINK_SELECTOR)?.getAttribute('aria-label'),
     );
     expect(handles).toEqual(FIXTURE_REELS.map((r) => `${r.handle} reels`));
   });
@@ -58,6 +58,15 @@ describe('findReelContainers', () => {
 });
 
 describe('containerForPlayer', () => {
+  it('skips a zero-height wrapper around an absolutely positioned player', () => {
+    const box = feed.containers[0];
+    const wrapper = document.createElement('div');
+    wrapper.append(...box.childNodes);
+    box.append(wrapper);
+    expect(wrapper.getBoundingClientRect().height).toBe(0);
+    expect(containerForPlayer(wrapper.querySelector(VIDEO_PLAYER_SELECTOR))).toBe(box);
+    expect(activeReelContainer(findReelContainers())).toBe(box);
+  });
   it('resolves the container via the author link', () => {
     const player = document.querySelector(VIDEO_PLAYER_SELECTOR);
     const container = containerForPlayer(player);
@@ -196,7 +205,7 @@ describe('end-to-end extraction against the fixture', () => {
     expect(reel.shortcode).toBe(expected.shortcode);
     expect(reel.identity).toBe(expected.shortcode);
     expect(reel.authorHandle).toBe(expected.handle);
-    expect(reel.captionText).toContain('Synthetic warning caption');
+    expect(reel.captionText).toContain('Be careful');
     expect(reel.hashtags).toEqual(expected.hashtags);
     expect(reel.audioName).toBe(expected.audio);
   });
@@ -276,6 +285,7 @@ describe('container resolution caching', () => {
     const player = original.querySelector(VIDEO_PLAYER_SELECTOR);
 
     const relocated = document.createElement('div');
+    Object.defineProperty(relocated, 'clientHeight', { value: feed.viewportHeight });
     relocated.innerHTML = '<a aria-label="moved reels" href="/moved/reels/" role="link"></a>';
     document.body.appendChild(relocated);
     relocated.appendChild(player);

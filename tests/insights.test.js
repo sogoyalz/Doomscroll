@@ -242,9 +242,7 @@ describe('stackByDay', () => {
   it('pools the thirteen topic categories into one band', () => {
     // Twenty-one stacked colours is a texture, not a chart. The taxonomy
     // already says topics are context and charged registers are the finding.
-    const [stack] = stackByDay([
-      day('2026-08-01', { comedy: 5, food: 3, gaming: 2, sad: 4 }),
-    ]);
+    const [stack] = stackByDay([day('2026-08-01', { comedy: 5, food: 3, gaming: 2, sad: 4 })]);
     expect(bandsOf(stack)).toEqual({ [TOPICS_BAND]: 10, sad: 4 });
   });
 
@@ -284,7 +282,12 @@ describe('stackByDay', () => {
     const [stack] = stackByDay([
       day('2026-08-01', { [UNCLASSIFIED]: 1, neutral: 1, comedy: 1, sad: 1 }),
     ]);
-    expect(stack.bands.map((b) => b.key)).toEqual(['sad', TOPICS_BAND, 'neutral', UNCLASSIFIED]);
+    expect(stack.bands.map((b) => b.key)).toEqual([
+      'sad',
+      TOPICS_BAND,
+      'neutral',
+      UNCLASSIFIED,
+    ]);
   });
 
   it('omits bands with nothing in them', () => {
@@ -388,7 +391,14 @@ describe('longestChargedRun', () => {
 });
 
 describe('summarizeSession', () => {
-  const session = { id: 's1', startedAt: 1000, endedAt: 9000, reelCount: 99, totalDurationMs: 1, dominantCategory: null };
+  const session = {
+    id: 's1',
+    startedAt: 1000,
+    endedAt: 9000,
+    reelCount: 99,
+    totalDurationMs: 1,
+    dominantCategory: null,
+  };
   const seq = (...categories) =>
     categories.map((category, i) =>
       reel({ category, startedAt: 1000 + i * 10, watchDurationMs: 2000 }),
@@ -427,7 +437,12 @@ describe('summarizeSession', () => {
 
   it('copes with a session whose reels have all been pruned', () => {
     const summary = summarizeSession(session, []);
-    expect(summary).toMatchObject({ reelCount: 0, totalDurationMs: 0, bands: [], longestRun: null });
+    expect(summary).toMatchObject({
+      reelCount: 0,
+      totalDurationMs: 0,
+      bands: [],
+      longestRun: null,
+    });
   });
 
   it('carries the session’s own timestamps through', () => {

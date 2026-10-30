@@ -48,7 +48,7 @@ determine creditworthiness. All true; nothing is transmitted anywhere.
 >
 > It tracks watch time, reel count, scroll pace, and your longest unbroken
 > stretch. It reads each reel's caption, hashtags, and audio name to sort it
-> into one of eight categories, and shows the mix.
+> into one of twenty-one categories, and shows the mix.
 >
 > The part that matters: it watches for the feed locking onto one category and
 > serving it back. That judgement is made against YOUR OWN normal, not a fixed
@@ -86,10 +86,15 @@ Suggested screenshots, in order: the popup with a populated day; the category
 mix with a clear dominant category; the options detection log; the "why so
 much neutral" tuning report.
 
-Take them with real data, not the mocked preview — reviewers can usually tell,
-and fabricated screenshots are grounds for removal.
+Use a clearly disclosed demonstration account or consented, redacted data.
+Never expose a tester’s viewing history, handles, or personal messages in public assets.
 
 ## Before submitting
+
+Complete every gate in [release-readiness.md](release-readiness.md), including
+live extraction validation and the opt-in beta. An archive building successfully
+is not evidence that these gates passed.
+
 
 - [x] Host `PRIVACY.md` at a public URL:
       `https://sogoyalz.github.io/Doomscroll/PRIVACY`.

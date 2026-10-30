@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** 9 September 2026
+**Last updated:** 30 October 2026
 
 Doomscroll is a Chrome extension that tracks which Instagram Reels you watch
 and flags when the feed is serving you a repetitive stream of similar content.
@@ -16,18 +16,18 @@ verify this yourself: there is not a single `fetch`, `XMLHttpRequest`,
 
 Stored locally in your browser (IndexedDB and `chrome.storage.local`):
 
-| Data | Why |
-|---|---|
-| Reel identifier (shortcode, or creator handle + video filename when no shortcode resolves) | To tell one reel from another |
-| Caption text, hashtags, audio track name | The only signal available for categorising content |
-| Watch duration, start and end time | Watch-time stats and binge detection |
-| Session identifier (a random UUID) | To group a continuous stretch of scrolling |
-| Assigned category and confidence | The dashboard breakdown |
-| Detection log entries | So you can review what the detector would have flagged |
-| Creator handle | Per-creator watch-time stats on the options page |
-| Interruption records (level, what prompted it, what you did about it, and whether a break you took held) | So you can see whether interrupting you actually helped |
-| Whether the last save failed | So the dashboard can say "reels aren't being saved" instead of showing an empty day |
-| Your settings | To remember your preferences |
+| Data                                                                                                                           | Why                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Reel identifier (shortcode, or creator handle + video filename when no shortcode resolves)                                     | To tell one reel from another                                                       |
+| Caption text, hashtags, audio track name                                                                                       | The only signal available for categorising content                                  |
+| Watch duration, start and end time                                                                                             | Watch-time stats and binge detection                                                |
+| Session identifier (a random UUID)                                                                                             | To group a continuous stretch of scrolling                                          |
+| Assigned category and confidence                                                                                               | The dashboard breakdown                                                             |
+| Detection log entries                                                                                                          | So you can review what the detector would have flagged                              |
+| Creator handle                                                                                                                 | Per-creator watch-time stats on the options page                                    |
+| Interruption records (level, what prompted it, what you did about it, confirmed delivery and any request to end a break early) | So you can review intervention decisions and responses                              |
+| Whether the last save failed                                                                                                   | So the dashboard can say "reels aren't being saved" instead of showing an empty day |
+| Your settings                                                                                                                  | To remember your preferences                                                        |
 
 **Creator handles are included.** They are stored alongside each reel for the
 per-creator breakdown, and when a reel's shortcode cannot be resolved the
@@ -46,18 +46,23 @@ exports.
 
 ## Permissions, and why each one is needed
 
-| Permission | Reason |
-|---|---|
-| `storage` | Save your settings and viewing history locally |
-| `alarms` | Run daily maintenance (rolling up stats, deleting old data) — a Manifest V3 background worker is shut down when idle and cannot use timers for this |
-| `notifications` *(optional)* | Show the gentlest break reminder. Requested only when you switch interventions on, never at install. Off by default, and unavailable until the extension has a week of your own history. Notifications are raised locally by the extension itself — nothing is pushed from a server, because there is no server |
-| `https://*.instagram.com/*` | Read reel captions on the page. This is the only site the extension runs on |
+| Permission                   | Reason                                                                                                                                                                                                                                                                                                          |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage`                    | Save your settings and viewing history locally                                                                                                                                                                                                                                                                  |
+| `alarms`                     | Run daily maintenance (rolling up stats, deleting old data) — a Manifest V3 background worker is shut down when idle and cannot use timers for this                                                                                                                                                             |
+| `notifications` _(optional)_ | Show the gentlest break reminder. Requested only when you switch interventions on, never at install. Off by default, and unavailable until the extension has a week of your own history. Notifications are raised locally by the extension itself — nothing is pushed from a server, because there is no server |
+| `https://*.instagram.com/*`  | Read reel captions on the page. This is the only site the extension runs on                                                                                                                                                                                                                                     |
 
 ## How long data is kept
 
 Raw per-reel history is deleted after **90 days**. Daily summaries are kept
 longer, because comparing today against your own past is the whole point of
 the detection, and summaries contain counts rather than captions.
+
+Completed views may temporarily be queued in local storage to recover failed
+message delivery. Pending copies expire after **24 hours** and are removed
+when tracking is paused or history is deleted. A break with no recorded early
+end does not establish that scrolling stopped.
 
 ## Your control
 

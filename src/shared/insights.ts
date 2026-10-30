@@ -109,9 +109,7 @@ export function planTrend(days: DayShare[]): TrendPlan {
     thin,
     drawable: plotted.length >= MIN_TREND_POINTS,
     ceiling: plotted.some((d) => d.share > HALF_SCALE) ? 1 : HALF_SCALE,
-    average: plotted.length
-      ? plotted.reduce((sum, d) => sum + d.share, 0) / plotted.length
-      : 0,
+    average: plotted.length ? plotted.reduce((sum, d) => sum + d.share, 0) / plotted.length : 0,
   };
 }
 
@@ -157,7 +155,8 @@ export const BAND_ORDER: readonly string[] = [
  * into showing the same feed differently.
  */
 function bandKeyFor(category: string): string {
-  if (isCharged(category) || category === 'neutral' || category === UNCLASSIFIED) return category;
+  if (isCharged(category) || category === 'neutral' || category === UNCLASSIFIED)
+    return category;
   return TOPICS_BAND;
 }
 
@@ -323,7 +322,10 @@ export interface AuthorBreakdown {
  * did not say so would understate long-standing creators.
  */
 export function authorBreakdown(events: ReelEvent[], limit = 10): AuthorBreakdown {
-  const byAuthor = new Map<string, { reels: number; watchMs: number; charged: number; classified: number }>();
+  const byAuthor = new Map<
+    string,
+    { reels: number; watchMs: number; charged: number; classified: number }
+  >();
   let attributed = 0;
   let unattributed = 0;
 

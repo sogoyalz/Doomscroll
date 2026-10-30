@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { currentSessionId } from '../src/content/session.ts';
+import { currentSessionId } from '../src/background/session.ts';
 import { DEFAULT_SETTINGS } from '../src/shared/defaults.ts';
 
 let store = {};
@@ -28,6 +28,15 @@ beforeEach(() => {
 });
 
 describe('currentSessionId', () => {
+  it('assigns concurrent tabs the same session', async () => {
+    const ids = await Promise.all(Array.from({ length: 8 }, () => currentSessionId(1000)));
+    expect(new Set(ids).size).toBe(1);
+  });
+
+  it('does not split a session while a long reel is being watched', async () => {
+    const first = await currentSessionId(1000);
+    expect(await currentSessionId(601_000, undefined, 1000)).toBe(first);
+  });
   it('mints an id on first use', async () => {
     const id = await currentSessionId(1_000_000);
     expect(id).toBeTruthy();

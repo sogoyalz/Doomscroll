@@ -45,10 +45,11 @@ export interface ExtractionHealth {
   fallbackIdentity: number;
   /**
    * Last reported liveness of the MAIN-world bridge. Distinguishes "React
-   * internals renamed" (`no-fiber`) from "the script never ran" (`absent`),
+   * internals renamed" (`no-fiber`) from "the script never ran" (`absent`)
+   * and from "the fiber is there but carries no media.code" (`no-code`),
    * which need different fixes and are otherwise indistinguishable from here.
    */
-  bridgeStatus: 'ok' | 'no-fiber' | 'absent';
+  bridgeStatus: 'ok' | 'no-fiber' | 'no-code' | 'absent';
   /**
    * Which audio selector produced each resolved audio name.
    *
@@ -88,16 +89,6 @@ function isHealth(value: unknown): value is ExtractionHealth {
 }
 
 /**
- * Decays one counter by a step of the rolling window.
- *
- * Floor, not round. Rounding has fixed points: at a 50-sample window the step
- * is 1/50, so a count of 25 decays to 24.5 and rounds straight back to 25 — a
- * counter that never recovers, leaving a stale alarm latched at exactly the
- * threshold long after the selector was fixed. Flooring always makes progress
- * downward, and a persistently failing channel still climbs back to ~49/50
- * because each new failure adds a whole unit.
- */
-/**
  * Ages a counter by one sample. Deliberately fractional.
  *
  * This used to floor, which silently disabled every warning in this file.
@@ -124,7 +115,10 @@ function decayCount(count: number, decay: number): number {
  * describes what is working now instead of accumulating a row per selector
  * that ever matched.
  */
-function decayChannels(channels: Record<string, number>, decay: number): Record<string, number> {
+function decayChannels(
+  channels: Record<string, number>,
+  decay: number,
+): Record<string, number> {
   const next: Record<string, number> = {};
   for (const [channel, count] of Object.entries(channels)) {
     const decayed = decayCount(count, decay);
@@ -156,6 +150,13 @@ function emptyHealth(): ExtractionHealth {
  * Counters are decayed proportionally once the sample is full rather than
  * kept as a list, so this stays a single small record no matter how much the
  * user scrolls, and recovers quickly once a broken selector is fixed.
+ *
+ * Called from the content script, which makes it the one write outside the
+ * service worker's ownership of storage — see the note at the top of
+ * background/index.ts. Read-modify-write on a shared key, so two tabs
+ * scrolling at once can drop a sample. Deliberately not locked: every number
+ * here is read as a ratio against `samples`, and a dropped update loses the
+ * numerator and the denominator together, so the rate it reports is unmoved.
  */
 export async function recordExtraction(outcome: {
   hasAuthor: boolean;
@@ -251,9 +252,20 @@ export function fallbackIdentityShare(health: ExtractionHealth): number {
  * True when the shortcode channel is no longer carrying identity.
  *
  * `no-fiber` is conclusive on its own — the bridge ran and found no React
- * expando at all — so it does not wait for the sample to fill. `absent` is
- * deliberately not treated as broken here: it is also what a page with no
- * MAIN-world injection yet looks like during startup.
+ * expando on any container — so it does not wait for the sample to fill.
+ *
+ * `no-code` deliberately is NOT conclusive, and used to be folded into
+ * `no-fiber`, which is what made this wrong. A fiber carrying no `media.code`
+ * is what a props rename looks like, but it is equally what an ordinary
+ * container looks like in the moment between mounting and hydrating — at page
+ * load, and every time a fresh batch arrives mid-scroll. One reel completing
+ * in that window latched "Reels aren't being identified reliably" on a
+ * perfectly healthy feed. If the channel really is dead the fallback rate
+ * below will say so over a full sample, which is the honest instrument.
+ *
+ * `absent` is likewise not treated as broken: it is what a page with no
+ * MAIN-world injection yet looks like during startup, and what a paused
+ * extension looks like.
  */
 export function isShortcodeDegraded(health: ExtractionHealth): boolean {
   if (health.bridgeStatus === 'no-fiber') return true;
