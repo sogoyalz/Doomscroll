@@ -62,6 +62,26 @@ beforeEach(() => {
 const status = () => document.documentElement.getAttribute(BRIDGE_STATUS_ATTR);
 
 describe('shortcodeFromFiber', () => {
+  it('finds media props below the measurable geometry wrapper', () => {
+    const el = container({});
+    const player = el.querySelector('[aria-label="Video player"]');
+    player[FIBER_KEY] = {
+      memoizedProps: {},
+      return: {
+        memoizedProps: { media: { code: 'PLAYER12345' } },
+        return: el[FIBER_KEY],
+      },
+    };
+    expect(mw.shortcodeFromFiber(el)).toBe('PLAYER12345');
+  });
+
+  it('prefers the media leaf over stale wrapper props', () => {
+    const el = container({ code: 'OLDWRAPPER1' });
+    const video = document.createElement('video');
+    video[FIBER_KEY] = { memoizedProps: { media: { code: 'NEWVIDEO123' } }, return: null };
+    el.querySelector('[aria-label="Video player"]').append(video);
+    expect(mw.shortcodeFromFiber(el)).toBe('NEWVIDEO123');
+  });
   it('reads media.code off the container fiber', () => {
     const el = container({ code: 'Dbv6giIR-kt' });
     expect(mw.shortcodeFromFiber(el)).toBe('Dbv6giIR-kt');

@@ -21,6 +21,7 @@ import {
   SHORTCODE_SRC_ATTR,
   trackingPaused,
   TRACKING_ATTR,
+  VIDEO_PLAYER_SELECTOR,
 } from './dom.js';
 
 // memoizedProps.media.code was found within ~5 levels; 30 is generous
@@ -64,16 +65,25 @@ export function shortcodeFromFiber(el: HTMLElement): string | null {
  * it could only mean the first.
  */
 function readFiber(el: HTMLElement): { code: string | null; hasFiber: boolean } {
-  const root = fiberOf(el);
-  if (!root) return { code: null, hasFiber: false };
-
-  let node: FiberNode | null = root;
-  for (let depth = 0; depth < FIBER_WALK_LIMIT && node; depth++) {
-    const code = node.memoizedProps?.media?.code;
-    if (typeof code === 'string' && code) return { code, hasFiber: true };
-    node = node.return;
+  // Geometry wrappers may sit above the component holding media props.
+  // Starting only from that wrapper skips the component entirely. Prefer
+  // the media leaf and player, retaining the wrapper as a fallback.
+  let hasFiber = false;
+  for (const candidate of [
+    el.querySelector('video'),
+    el.querySelector(VIDEO_PLAYER_SELECTOR),
+    el,
+  ]) {
+    if (!(candidate instanceof HTMLElement)) continue;
+    let node: FiberNode | null = fiberOf(candidate);
+    if (node) hasFiber = true;
+    for (let depth = 0; depth < FIBER_WALK_LIMIT && node; depth++) {
+      const code = node.memoizedProps?.media?.code;
+      if (typeof code === 'string' && code) return { code, hasFiber: true };
+      node = node.return;
+    }
   }
-  return { code: null, hasFiber: true };
+  return { code: null, hasFiber };
 }
 
 /**

@@ -56,6 +56,10 @@ audio across such a sample is a failed gate, regardless of unit-test results.
 
 ## Beta acceptance gate — pending
 
+The predeclared [beta acceptance criteria](beta-acceptance.md) specify the
+cohort, privacy rules, operational thresholds, and result record. No multi-user
+results have been collected yet.
+
 Run a small opt-in beta for at least two weeks of normal desktop use across
 several people. Review false alerts, missed patterns reported by testers,
 extraction failures, save failures, alert dismissals, and voluntary break

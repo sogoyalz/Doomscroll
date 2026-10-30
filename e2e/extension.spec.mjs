@@ -22,7 +22,9 @@ html,body{margin:0}#feed{height:100vh;overflow-y:auto}section{height:100vh;posit
 <a href="/reels/audio/123/"><span dir="auto">Example Artist · Example Track</span></a></div></section>`,
 ).join('')}
 </div><script>document.querySelectorAll('[data-reel]').forEach((el,i)=>{
-el.__reactFiber$fixture={memoizedProps:{media:{code:'SYNTHETIC0'+i}},return:null};
+el.__reactFiber$fixture={memoizedProps:{},return:null};
+el.querySelector('video').__reactFiber$fixture={memoizedProps:{},return:{
+memoizedProps:{media:{code:'SYNTHETIC0'+i}},return:el.__reactFiber$fixture}};
 });</script></body></html>`;
 
 async function send(type, payload = {}) {
