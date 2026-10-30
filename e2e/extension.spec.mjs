@@ -160,6 +160,15 @@ test('real content scripts record scrolling, extract audio, and respect SPA priv
     'SYNTHETIC00',
     'SYNTHETIC02',
   ]);
+  await page.evaluate(() => history.pushState({}, '', '/accounts/edit/'));
+  await advance(page, 1);
+  await page.waitForTimeout(1200);
+  expect(await events()).toHaveLength(2);
+  const accounts = await context.newPage();
+  await accounts.goto('https://www.instagram.com/accounts/edit/');
+  await expect(accounts.locator('[data-doomscroll-shortcode]')).toHaveCount(0);
+  await expect(accounts.locator('#doomscroll-hud')).toHaveCount(0);
+  expect(await events()).toHaveLength(2);
 });
 
 test('the default 20-reel block is delivered and its dismiss delay can always expire', async () => {

@@ -13,6 +13,7 @@ vi.mock('../src/background/detect.ts', () => detect);
 
 let store = {};
 let listener;
+let alarmListener;
 
 globalThis.chrome = {
   runtime: {
@@ -26,7 +27,11 @@ globalThis.chrome = {
     getURL: (p) => p,
   },
   alarms: {
-    onAlarm: { addListener() {} },
+    onAlarm: {
+      addListener(fn) {
+        alarmListener = fn;
+      },
+    },
     create() {},
     async get() {
       return undefined;
@@ -38,6 +43,7 @@ globalThis.chrome = {
   storage: {
     local: {
       async get(key) {
+        if (key == null) return { ...store };
         return key in store ? { [key]: store[key] } : {};
       },
       async set(entries) {
@@ -112,6 +118,36 @@ beforeEach(async () => {
 });
 
 describe('REEL_VIEW_LOGGED', () => {
+  it('recovers later queued views when an earlier record fails, then retries it safely', async () => {
+    const first = payload({ id: 'retry-first' });
+    const second = payload({ id: 'retry-second', startedAt: NOW + 1, endedAt: NOW + 5001 });
+    for (const event of [first, second]) {
+      store['doomscroll:pendingView:' + event.id] = { event, queuedAt: Date.now() };
+    }
+    const original = db.recordReelViewOnce;
+    const spy = vi
+      .spyOn(db, 'recordReelViewOnce')
+      .mockImplementation((event, classification) => {
+        if (event.id === first.id) return Promise.reject(new Error('synthetic write failure'));
+        return original(event, classification);
+      });
+    try {
+      alarmListener({ name: 'doomscroll:delivery' });
+      await vi.waitFor(async () => {
+        expect((await getAllReelEvents()).map((event) => event.id)).toEqual([second.id]);
+        expect(store['doomscroll:pendingView:' + second.id]).toBeUndefined();
+      });
+      expect(store['doomscroll:pendingView:' + first.id]).toBeDefined();
+      spy.mockRestore();
+      alarmListener({ name: 'doomscroll:delivery' });
+      await vi.waitFor(async () => {
+        expect(await getAllReelEvents()).toHaveLength(2);
+        expect(store['doomscroll:pendingView:' + first.id]).toBeUndefined();
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
   it('stores the reel and queues its day', async () => {
     const result = await send({ type: 'REEL_VIEW_LOGGED', payload: payload() });
 

@@ -340,7 +340,13 @@ async function retryPendingViews(): Promise<void> {
   for (const event of await readPendingViews()) {
     // Recovered views update history and detection, but never interrupt a tab
     // that may now be showing unrelated content.
-    await handlers.REEL_VIEW_LOGGED!(event, {});
+    try {
+      await handlers.REEL_VIEW_LOGGED!(event, {});
+    } catch {
+      // Retain this durable copy for the next attempt, but do not let a
+      // single failing record starve every later view. Never log its payload.
+      console.error('Doomscroll: a pending view could not be saved; will retry');
+    }
   }
 }
 
