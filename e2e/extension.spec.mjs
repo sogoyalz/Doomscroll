@@ -88,7 +88,17 @@ async function launchProfile() {
   );
   await context.route('https://media.example.invalid/**', (route) => route.abort());
   options = await context.newPage();
-  await options.goto(`chrome-extension://${extensionId}/src/options/index.html`);
+  const optionsUrl = `chrome-extension://${extensionId}/src/options/index.html`;
+  try {
+    await options.goto(optionsUrl);
+  } catch (error) {
+    // Chrome can restore/open the options page concurrently after relaunch.
+    // Accept only a same-destination navigation, then verify the actual UI.
+    if (!String(error).includes(`interrupted by another navigation to "${optionsUrl}"`)) {
+      throw error;
+    }
+    await options.waitForURL(optionsUrl, { waitUntil: 'domcontentloaded' });
+  }
   await expect(options.getByLabel('Record the reels I watch')).toBeChecked();
 }
 
