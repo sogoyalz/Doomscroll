@@ -119,7 +119,16 @@
         const [head, ...body] = rowsRaw;
         return body.map((r) => Object.fromEntries(head.map((h, j) => [h, r[j] ?? ''])));
       }
-      function cell(v) { const s = String(v ?? ''); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+      // Same defence as src/shared/csv.ts, and for the same reason: these
+      // captions are scraped from instagram.com, so a cell beginning = + - @
+      // is a live formula to Excel, Sheets and Numbers. The extension's own
+      // export has always guarded this; the file this tool writes is the same
+      // data taking a different route out, and it did not.
+      function cell(v) {
+        let s = String(v ?? '');
+        if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+        return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      }
       function shuffle(a) { for (let k = a.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [a[k], a[j]] = [a[j], a[k]]; } return a; }
 
       function renderStart() {
