@@ -65,6 +65,15 @@ describe('sensitive-data push guard', () => {
     expect(check('HEAD').status).toBe(1);
   });
 
+  it.each(['Screenshot 2026-10-30.png', 'Screen Recording sample.mov', 'debug.log'])(
+    'rejects private captures or logs even when force-added: %s',
+    (path) => {
+      add(path, 'synthetic fixture');
+      commit();
+      expect(check('HEAD').status).toBe(1);
+    },
+  );
+
   it('rejects a deleted secret without printing its value', () => {
     const secret = 'ghp_' + 'x'.repeat(36);
     add('config.txt', secret);

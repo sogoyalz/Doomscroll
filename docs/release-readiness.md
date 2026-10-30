@@ -40,8 +40,9 @@ release archive.
 
 The installed candidate now passes a [ten-view live capture smoke sample](live-capture-2026-10-30.md), with ten fiber-derived IDs and an exact capture-counter increase. A follow-up
 ten-view sample also received ten successful worker save acknowledgements with
-zero skips or unconfirmed deliveries. Independent popup-count reconciliation
-and the remaining matrix below are still pending.
+zero skips or unconfirmed deliveries. Independent popup-count reconciliation was skipped at the project owner’s
+request on 30 October 2026 and remains unverified. The remaining live matrix
+below is still pending.
 
 A limited [live layout smoke check](live-check-2026-10-30.md) found and verified
 fixes for zero-height wrappers and duplicate audio links. It does not replace

@@ -16,8 +16,8 @@ import type { ExtractedReel } from './extractor.js';
 
 /**
  * Rendered inside a shadow root so Instagram's stylesheet cannot reach it and
- * it cannot reach Instagram's. Open rather than closed: nothing here is
- * sensitive, and an inspectable panel is easier to debug than a sealed one.
+ * it cannot reach Instagram's. The optional panel contains viewing metadata;
+ * keep screenshots local. Its open root supports inspection during validation.
  */
 const HOST_ID = 'doomscroll-hud';
 

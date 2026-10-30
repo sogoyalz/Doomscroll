@@ -33,3 +33,11 @@ doomscroll-*.zip.sha256
 .workspace-backup/
 .dev/
 .code-review-graph/
+
+# Private captures and debug output
+Screenshot*
+Screen Recording*
+*.log
+*.mov
+*.mp4
+*.webm
