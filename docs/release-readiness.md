@@ -51,7 +51,10 @@ resume; export and deletion; notification permission denied; each intervention
 level; accepting a break; returning during and after a break.
 
 For each session, reconcile an independently counted sample of completed views
-with stored views. Investigate every unexplained identity swap, duplicated
+with stored views. The diagnostic panel now separates captured views from
+worker-confirmed saves, deliberate discards, and unconfirmed delivery. Packaged
+browser tests reconcile these acknowledgements with IndexedDB; this does not
+replace the pending live check. Investigate every unexplained identity swap, duplicated
 view, lost completed view, interruption during a pause, or failed dismissal.
 Audio must resolve on reels with visible readable attribution. Zero extracted
 audio across such a sample is a failed gate, regardless of unit-test results.

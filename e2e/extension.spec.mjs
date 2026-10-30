@@ -118,10 +118,14 @@ test('packaged popup and settings load with a working pause control', async () =
 });
 
 test('real content scripts record scrolling, extract audio, and respect SPA privacy exclusions', async () => {
+  await send('UPDATE_SETTINGS', { debugHud: true });
   const page = await feed();
   await page.waitForTimeout(400); // Exercise the real 250ms dwell threshold.
   await advance(page, 1);
   await expect.poll(async () => (await events()).length).toBe(1);
+  await expect(page.locator('#doomscroll-hud')).toContainText(
+    'reels: 1  saved: 1  skipped: 0  unconfirmed: 0',
+  );
   expect((await events())[0]).toMatchObject({
     reelShortcode: 'SYNTHETIC00',
     audioName: 'Example Artist · Example Track',
@@ -135,6 +139,9 @@ test('real content scripts record scrolling, extract audio, and respect SPA priv
   await page.waitForTimeout(1200);
   await advance(page, 0);
   await expect.poll(async () => (await events()).length).toBe(2);
+  await expect(page.locator('#doomscroll-hud')).toContainText(
+    'reels: 2  saved: 2  skipped: 0  unconfirmed: 0',
+  );
   expect((await events()).map((view) => view.reelShortcode).sort()).toEqual([
     'SYNTHETIC00',
     'SYNTHETIC02',

@@ -17,7 +17,7 @@ import {
   isTrackingSurface,
 } from './dom.js';
 import { createDwellTracker, type CompletedView } from './dwell-timer.js';
-import { isHudMounted, mountHud, pushHudRow, unmountHud } from './hud.js';
+import { confirmHudDelivery, mountHud, pushHudRow, unmountHud } from './hud.js';
 import { hideOverlay, isOverlayShowing, showBreakReminder, showOverlay } from './overlay.js';
 import { goTo } from './navigate.js';
 import {
@@ -41,6 +41,7 @@ import { keepPendingView } from '@shared/pending-views.js';
 import { noteStorageFailure } from '@shared/storage-health.js';
 import { recordExtraction } from '@shared/health.js';
 import { getSettings, SETTINGS_KEY } from '@shared/settings.js';
+import { send } from '@shared/client.js';
 import type { ExtensionMessage } from '@shared/messages.js';
 import type { NewReelEvent } from '@shared/types.js';
 
@@ -242,9 +243,7 @@ async function reportView(
     now: view.endedAt,
   });
 
-  reportToHud(reel, event);
-
-  const message: ExtensionMessage = { type: 'REEL_VIEW_LOGGED', payload: event };
+  pushHudRow(reel, event.watchDurationMs);
   try {
     // Keep a durable copy before delivery. A lost message or acknowledgement
     // is recovered by the worker's alarm; the event id makes retries safe.
@@ -256,7 +255,8 @@ async function reportView(
     // sendMessage returns a promise here; without the catch, a rejection
     // (service worker asleep, context invalidated during reload) surfaces as
     // an unhandled rejection in the page console.
-    await chrome.runtime.sendMessage(message);
+    const result = await send('REEL_VIEW_LOGGED', event);
+    confirmHudDelivery(result.queued);
   } catch {
     // The worker retries the durable copy after reconnecting.
   }
@@ -324,34 +324,6 @@ async function applyTrackingSetting(): Promise<void> {
   // switch — a panel showing a frozen count while paused reads as a bug.
   if (debugHud && trackingEnabled) mountHud();
   else unmountHud();
-}
-
-/**
- * Feeds the diagnostic panel, when one is mounted.
- *
- * Guarded rather than unconditional so the HUD costs nothing in the normal
- * case: this runs once per finished reel on the page the user is scrolling.
- *
- * The per-reel console line lives behind the same guard. It used to run
- * unconditionally, which put the caption of everything you watch into the
- * console of a page you do not control, on a machine whose whole selling point
- * is that this data never leaves it — a debugging convenience that had outlived
- * the debug switch built for exactly this.
- */
-function reportToHud(reel: ExtractedReel, event: NewReelEvent): void {
-  // Counted first, and unconditionally. hud.ts documents the total as
-  // surviving the panel being closed, and its render() already no-ops while
-  // unmounted — but this returned before counting, so the total silently
-  // restarted whenever the panel was reopened. The live-session protocol's
-  // first check compares it against the popup's count, where a reset reads as
-  // dropped views rather than as a panel that was shut.
-  pushHudRow(reel, event.watchDurationMs);
-  if (!isHudMounted()) return;
-
-  console.log(
-    `[Doomscroll] reel watched ${event.watchDurationMs}ms — "${event.reelShortcode}"`,
-    reel.captionText ? `caption: ${reel.captionText.slice(0, 60)}` : '(no caption)',
-  );
 }
 
 /**

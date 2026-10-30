@@ -166,3 +166,16 @@ describe('the running total survives the panel being closed', () => {
     expect(panelText()).toContain('reels: 3');
   });
 });
+
+it('separates capture from confirmed storage and deliberate discards', async () => {
+  vi.resetModules();
+  const hud = await import('../src/content/hud.ts');
+  hud.pushHudRow(reel(), 3000);
+  hud.pushHudRow(reel(), 3000);
+  hud.pushHudRow(reel(), 3000);
+  hud.confirmHudDelivery(true);
+  hud.confirmHudDelivery(false);
+  hud.mountHud();
+  expect(panelText()).toContain('reels: 3  saved: 1  skipped: 1  unconfirmed: 1');
+  hud.unmountHud();
+});
