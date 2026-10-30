@@ -62,7 +62,7 @@ export interface UserSettings {
    * See docs/live-session-protocol.md.
    */
   debugHud: boolean;
-  classificationMode: 'local-rules' | 'local-ml' | 'cloud-llm';
+  classificationMode: 'local-rules' | 'local-ml';
   patternWindowSize: number; // e.g. 15
   patternDominantThreshold: number; // e.g. 0.6
   patternBaselineMultiplier: number; // e.g. 1.5 — how far above baseline counts as anomalous

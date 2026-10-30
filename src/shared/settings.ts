@@ -97,7 +97,7 @@ function mergeLevels(
 }
 
 const WATCHABLE = new Set<string>(CHARGED_CATEGORIES);
-const MODES: UserSettings['classificationMode'][] = ['local-rules', 'local-ml', 'cloud-llm'];
+const MODES: UserSettings['classificationMode'][] = ['local-rules', 'local-ml'];
 
 /**
  * Shallow merge, except for `interventionLevels` — a plain spread would let a

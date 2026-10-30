@@ -201,7 +201,7 @@ describe('settings are validated on the way in', () => {
   });
 
   it('refuses a classification mode that does not exist', async () => {
-    const s = await bad({ classificationMode: 'gpt-9' });
+    const s = await bad({ classificationMode: 'unsupported-mode' });
     expect(s.classificationMode).toBe(DEFAULT_SETTINGS.classificationMode);
   });
 
