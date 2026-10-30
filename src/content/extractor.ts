@@ -12,6 +12,8 @@ export interface ExtractedReel {
   shortcode: string | null;
   /** Shortcode when available, else a derived key. Never empty. */
   identity: string;
+  /** Video basename retained even when a shortcode supplies the identity. */
+  videoBasename: string | null;
   captionText: string | null;
   hashtags: string[];
   audioName: string | null;
@@ -151,41 +153,45 @@ export function extractAudio(container: HTMLElement): {
   name: string | null;
   channel: AudioChannel | null;
 } {
-  const found = audioScope(container);
-  if (!found) return { name: null, channel: null };
-
-  const { scope, channel } = found;
-
-  for (const span of scope.querySelectorAll<HTMLElement>('span[dir="auto"]')) {
-    const text = readText(span);
-    if (text.includes(AUDIO_SEPARATOR)) {
-      const firstLine = text.split('\n')[0]?.trim();
-      if (firstLine) return { name: firstLine, channel };
+  for (const { scope, channel } of audioScopes(container)) {
+    for (const span of scope.querySelectorAll<HTMLElement>('span[dir="auto"]')) {
+      const text = readText(span);
+      if (text.includes(AUDIO_SEPARATOR)) {
+        const firstLine = text.split('\n')[0]?.trim();
+        if (firstLine) return { name: firstLine, channel };
+      }
     }
-  }
 
-  // No separator found (single-name audio): fall back to the scope's own text.
-  const fallback = readText(scope).split('\n')[0]?.trim();
-  // The scope matched but held no readable text — a broken channel, not audio.
-  return fallback ? { name: fallback, channel } : { name: null, channel: null };
+    // No separator found (single-name audio): fall back to the scope's own text.
+    const fallback = readText(scope).split('\n')[0]?.trim();
+    // The scope matched but held no readable text — a broken channel, not audio.
+    if (fallback) return { name: fallback, channel };
+  }
+  return { name: null, channel: null };
 }
 
 /**
  * The element holding the audio attribution, tried by href, then by the
  * "Audio image" icon's nearest link/row when the href anchors miss.
  */
-function audioScope(
+function* audioScopes(
   container: HTMLElement,
-): { scope: HTMLElement; channel: AudioChannel } | null {
+): Generator<{ scope: HTMLElement; channel: AudioChannel }> {
+  const seen = new Set<HTMLElement>();
   for (const { channel, selector } of AUDIO_LINK_SELECTORS) {
-    const link = container.querySelector<HTMLElement>(selector);
-    if (link) return { scope: link, channel };
+    // Responsive and marquee copies may precede the readable attribution.
+    // An empty first match must not prevent trying the rest of this reel.
+    for (const link of container.querySelectorAll<HTMLElement>(selector)) {
+      if (seen.has(link)) continue;
+      seen.add(link);
+      yield { scope: link, channel };
+    }
   }
   const icon = container.querySelector<HTMLElement>(AUDIO_ICON_SELECTOR);
-  if (!icon) return null;
+  if (!icon) return;
   // Prefer the icon's enclosing link; else its parent row.
   const scope = icon.closest<HTMLElement>('a') ?? icon.parentElement;
-  return scope ? { scope, channel: 'icon' } : null;
+  if (scope && !seen.has(scope)) yield { scope, channel: 'icon' };
 }
 
 /**
@@ -227,21 +233,23 @@ export function extractShortcode(container: HTMLElement): string | null {
  */
 export const UNIDENTIFIED_IDENTITY = 'unknown|';
 
-function fallbackIdentity(container: HTMLElement, authorHandle: string | null): string {
+function extractVideoBasename(container: HTMLElement): string | null {
   const video = container.querySelector('video');
   const src = video?.currentSrc || video?.getAttribute('src') || '';
   const basename = src.split('?')[0]?.split('/').pop() ?? '';
-  return `${authorHandle ?? 'unknown'}|${basename}`;
+  return basename || null;
 }
 
 export function extractReel(container: HTMLElement): ExtractedReel {
   const authorHandle = extractAuthorHandle(container);
   const shortcode = extractShortcode(container);
   const audio = extractAudio(container);
+  const videoBasename = extractVideoBasename(container);
 
   return {
     shortcode,
-    identity: shortcode ?? fallbackIdentity(container, authorHandle),
+    identity: shortcode ?? `${authorHandle ?? 'unknown'}|${videoBasename ?? ''}`,
+    videoBasename,
     captionText: extractCaption(container),
     hashtags: extractHashtags(container),
     audioName: audio.name,
@@ -256,26 +264,39 @@ export function extractReel(container: HTMLElement): ExtractedReel {
  * that had not resolved yet from a later read.
  *
  * The feed is virtualized: by the time a reel finishes, its container may
- * already hold the next reel's content, so the snapshot wins for text. The
- * shortcode is the exception — the MAIN-world bridge may tag a container
- * after it becomes active, so a later non-null value is an improvement.
+ * already hold the next reel's content, so the snapshot always wins for a
+ * field it actually has. Fields it does NOT have are a different question —
+ * the caption and audio row commonly render a beat after the reel becomes
+ * active, and a later read is the only chance to recover them.
+ *
+ * Taking only the shortcode, as this used to, threw the rest away. Nothing
+ * else recovered it either: `reconcileActiveReel` fills late-rendered text,
+ * but it runs on the one-second heartbeat and the dwell minimum is 250ms, so
+ * a reel watched briefly completed without ever being reconciled and was
+ * logged as text-free with its caption sitting in the DOM. That is a silent
+ * miss for the classifier and it inflates the very textless and audio-dark
+ * rates health.ts raises alarms on.
+ *
+ * Safe because of what the caller has already established: `later` is only
+ * passed once `isSameReel` has confirmed the container still holds this reel.
+ * Delegates to fillMissingFields so the precedence rules live in one place.
  */
 export function mergeExtractions(
   snapshot: ExtractedReel,
   later: ExtractedReel | null,
 ): ExtractedReel {
-  if (!later?.shortcode || snapshot.shortcode) return snapshot;
-  return {
-    ...snapshot,
-    shortcode: later.shortcode,
-    identity: later.shortcode,
-    shortcodeSource: 'fiber',
-  };
+  if (!later) return snapshot;
+  return fillMissingFields(snapshot, later);
 }
 
-/** True when a snapshot is still missing text that a later read might supply. */
+/** True when a snapshot is missing text or video identity a later read might supply. */
 export function isIncomplete(reel: ExtractedReel): boolean {
-  return reel.captionText === null || reel.audioName === null || reel.hashtags.length === 0;
+  return (
+    reel.captionText === null ||
+    reel.audioName === null ||
+    reel.hashtags.length === 0 ||
+    reel.videoBasename == null
+  );
 }
 
 /**
@@ -307,12 +328,14 @@ function readableText(reel: ExtractedReel): string {
   // Empty parts are dropped before joining, not after. The separator is not
   // whitespace, so trimming a separator-only string leaves it truthy and a
   // reel with nothing readable would read as having text.
-  return [reel.captionText, reel.hashtags.join(' '), reel.audioName]
-    .map((part) => part?.trim() ?? '')
-    .filter(Boolean)
-    // A separator no caption can contain, so two fields cannot run together
-    // into the same string as one field holding both.
-    .join('\u0000');
+  return (
+    [reel.captionText, reel.hashtags.join(' '), reel.audioName]
+      .map((part) => part?.trim() ?? '')
+      .filter(Boolean)
+      // A separator no caption can contain, so two fields cannot run together
+      // into the same string as one field holding both.
+      .join('\u0000')
+  );
 }
 
 /**
@@ -325,7 +348,10 @@ function readableText(reel: ExtractedReel): string {
  * the feed recycles containers — otherwise this would graft the next reel's
  * text onto this one.
  */
-export function fillMissingFields(snapshot: ExtractedReel, fresh: ExtractedReel): ExtractedReel {
+export function fillMissingFields(
+  snapshot: ExtractedReel,
+  fresh: ExtractedReel,
+): ExtractedReel {
   const shortcode = snapshot.shortcode ?? fresh.shortcode;
 
   // Identity precedence: a real shortcode, then the snapshot's own derived
@@ -336,6 +362,7 @@ export function fillMissingFields(snapshot: ExtractedReel, fresh: ExtractedReel)
   return {
     shortcode,
     identity,
+    videoBasename: snapshot.videoBasename ?? fresh.videoBasename ?? null,
     captionText: snapshot.captionText ?? fresh.captionText,
     hashtags: snapshot.hashtags.length ? snapshot.hashtags : fresh.hashtags,
     audioName: snapshot.audioName ?? fresh.audioName,
@@ -388,6 +415,11 @@ export function isSameReel(a: ExtractedReel, b: ExtractedReel): boolean {
   // resolved our shortcode late", and the first reel's watch time gets filed
   // under the second reel's identity.
   if (a.authorHandle && b.authorHandle && a.authorHandle !== b.authorHandle) return false;
+
+  // A shortcode arriving can also mean the container was recycled for another
+  // reel by the same creator. Keep the video signal independent of identity
+  // so that replacing a fallback identity with a shortcode cannot hide this.
+  if (a.videoBasename && b.videoBasename && a.videoBasename !== b.videoBasename) return false;
 
   // A shortcode on only one side: the MAIN-world bridge tagged this container
   // after the snapshot was taken. Same reel, now identifiable.

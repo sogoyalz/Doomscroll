@@ -45,10 +45,13 @@ describe('escapeCSV', () => {
 
 describe('toCSV', () => {
   it('emits a header followed by escaped rows', () => {
-    const csv = toCSV(['a', 'b'], [
-      [1, 'x'],
-      [2, 'y'],
-    ]);
+    const csv = toCSV(
+      ['a', 'b'],
+      [
+        [1, 'x'],
+        [2, 'y'],
+      ],
+    );
     expect(csv).toBe('a,b\n"1","x"\n"2","y"');
   });
 
@@ -60,14 +63,14 @@ describe('toCSV', () => {
 describe('reelEventsToCSV', () => {
   const event = {
     id: 'e1',
-    reelShortcode: 'SYNTH-00001',
+    reelShortcode: 'Dbv6giIR-kt',
     sessionId: 's1',
     startedAt: 1700000000000,
     endedAt: 1700000005000,
     watchDurationMs: 5000,
     captionText: 'hello',
     hashtags: ['fyp', 'animation'],
-    audioName: 'Sample Artist · Sample Track',
+    audioName: 'Nikk · Nakhre Tere',
     category: 'joyful',
     categoryConfidence: 0.82,
     subtags: ['dance'],
@@ -99,8 +102,8 @@ describe('reelEventsToCSV', () => {
   });
 
   it('exports the author handle', () => {
-    expect(reelEventsToCSV([{ ...event, authorHandle: 'samplecreator' }])).toContain(
-      '"samplecreator"',
+    expect(reelEventsToCSV([{ ...event, authorHandle: 'sakshiandsid' }])).toContain(
+      '"sakshiandsid"',
     );
   });
 

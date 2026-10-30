@@ -5,7 +5,21 @@
 // Run via `npm run package`.
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, existsSync, rmSync } from 'node:fs';
+import {
+  readFileSync,
+  existsSync,
+  rmSync,
+  readdirSync,
+  lstatSync,
+  writeFileSync,
+  mkdtempSync,
+  mkdirSync,
+  copyFileSync,
+  chmodSync,
+  utimesSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
@@ -24,6 +38,34 @@ const manifest = JSON.parse(readFileSync(join(dist, 'manifest.json'), 'utf8'));
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
 const problems = [];
+const minimumChrome = Number(manifest.minimum_chrome_version?.split('.')[0]);
+if (!Number.isInteger(minimumChrome) || minimumChrome < 116) {
+  problems.push('minimum Chrome version must cover Promise-based notification delivery (116+)');
+}
+
+// An archive must contain only known build outputs. In particular, reject
+// source maps, exports, credentials, browser profiles, and arbitrary public/
+// files that Vite may have copied into dist.
+function inspect(directory, prefix = '') {
+  for (const name of readdirSync(directory)) {
+    const path = prefix + name;
+    const absolute = join(directory, name);
+    const stat = lstatSync(absolute);
+    if (stat.isSymbolicLink()) problems.push(`symlink in build: ${path}`);
+    else if (stat.isDirectory()) inspect(absolute, path + '/');
+    else if (
+      !(
+        path === 'manifest.json' ||
+        path === 'service-worker-loader.js' ||
+        /^assets\/[^/]+\.(?:js|css)$/.test(path) ||
+        /^assets\/icons\/icon(?:16|48|128)\.png$/.test(path) ||
+        /^src\/(?:popup|options)\/index\.html$/.test(path)
+      )
+    )
+      problems.push(`unexpected file in build: ${path}`);
+  }
+}
+inspect(dist);
 
 if (manifest.version !== pkg.version) {
   // Chrome uses the manifest version; package.json is what everything else
@@ -67,14 +109,46 @@ const zipName = `doomscroll-${pkg.version}.zip`;
 const zipPath = join(root, zipName);
 rmSync(zipPath, { force: true });
 
+// Stable order, timestamps, permissions and stripped host metadata make the
+// archive reproducible without changing the working build's file metadata.
+const staging = mkdtempSync(join(tmpdir(), 'doomscroll-package-'));
+const archiveFiles = [];
+function stage(directory, prefix = '') {
+  for (const name of readdirSync(directory).sort()) {
+    const relative = prefix + name;
+    const source = join(directory, name);
+    const target = join(staging, relative);
+    if (lstatSync(source).isDirectory()) {
+      mkdirSync(target, { recursive: true });
+      stage(source, relative + '/');
+    } else {
+      copyFileSync(source, target);
+      chmodSync(target, 0o644);
+      const timestamp = new Date('2000-01-01T00:00:00Z');
+      utimesSync(target, timestamp, timestamp);
+      archiveFiles.push(relative);
+    }
+  }
+}
 try {
-  execFileSync('zip', ['-qr', zipPath, '.'], { cwd: dist, stdio: 'inherit' });
+  stage(dist);
+  execFileSync('zip', ['-Xq', zipPath, ...archiveFiles], {
+    cwd: staging,
+    env: { ...process.env, TZ: 'UTC' },
+    stdio: 'inherit',
+  });
 } catch (err) {
+  rmSync(zipPath, { force: true });
   if (err.code === 'ENOENT') fail('`zip` is not installed or not on PATH.');
   throw err;
+} finally {
+  rmSync(staging, { recursive: true, force: true });
 }
 
 console.log(`\n  ✓ ${zipName}`);
+const checksum = createHash('sha256').update(readFileSync(zipPath)).digest('hex');
+writeFileSync(zipPath + '.sha256', `${checksum}  ${zipName}\n`);
+console.log(`    SHA-256 ${checksum}`);
 console.log(`    ${scripts.length} content scripts, icons 16/48/128, worker ${worker}`);
 
 // The store listing blocks on assets that live outside this repo, so nothing

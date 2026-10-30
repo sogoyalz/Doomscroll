@@ -38,7 +38,16 @@ let host: HTMLElement | null = null;
 let root: ShadowRoot | null = null;
 let body: HTMLElement | null = null;
 let sessionReels = 0;
+let savedReels = 0;
+let skippedReels = 0;
 const history: HudRow[] = [];
+
+/** Called once per successful worker reply, never optimistically on capture. */
+export function confirmHudDelivery(saved: boolean): void {
+  if (saved) savedReels++;
+  else skippedReels++;
+  render();
+}
 
 const STYLE = `
   :host { all: initial; }
@@ -137,6 +146,8 @@ function render(): void {
   body.replaceChildren(
     line('summary', [
       text(`reels: ${sessionReels}`),
+      text(`  saved: ${savedReels}  skipped: ${skippedReels}`),
+      text(`  unconfirmed: ${sessionReels - savedReels - skippedReels}`),
       text('  bridge: '),
       badge(status, status === 'ok'),
       text(`  fallback: ${fallbacks}/${history.length}`),

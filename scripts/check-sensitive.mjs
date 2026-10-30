@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const git = (...args) => execFileSync('git', args, { maxBuffer: 64 * 1024 * 1024 });
 const refs = process.argv.slice(2);
 const privatePath =
-  /(?:^|\/)(?:\.env(?:\..*)?|\.aws|\.ssh|credentials(?:\..*)?|cookies(?:\..*)?|instagram-[^/]+-\d{4}-\d{2}-\d{2}[^/]*|(?:browser-)?profiles?)(?:\/|$)|\.(?:csv|tsv|har|pem|key|p12|pfx|sqlite3?|db|zip|ndjson)$/i;
+  /(?:^|\/)(?:\.workspace-backup|\.env(?:\..*)?|\.aws|\.ssh|credentials(?:\..*)?|cookies(?:\..*)?|instagram-[^/]+-\d{4}-\d{2}-\d{2}[^/]*|(?:browser-)?profiles?)(?:\/|$)|\.(?:csv|tsv|har|pem|key|p12|pfx|sqlite3?|db|zip|ndjson)$/i;
 const rules = [
   ['private key', /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/],
   ['GitHub token', /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b/],

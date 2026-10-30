@@ -156,6 +156,7 @@ const INTERVENTION_HEADER = [
   'breakStartedAt',
   'breakEndedEarlyAt',
   'breakHeldMs',
+  'deliveredAt',
 ];
 
 /**
@@ -189,6 +190,7 @@ export function interventionLogToCSV(entries: InterventionLogEntry[]): string {
     e.breakStartedAt == null || e.breakEndedEarlyAt == null
       ? ''
       : e.breakEndedEarlyAt - e.breakStartedAt,
+    e.deliveredAt == null ? '' : isoOrEmpty(e.deliveredAt),
   ]);
   return toCSV(INTERVENTION_HEADER, rows);
 }

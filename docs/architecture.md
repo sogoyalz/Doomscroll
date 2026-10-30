@@ -5,9 +5,10 @@ IndexedDB (via `idb`) for reel history.
 
 Build phases: (1) shell + DOM research, (2) detection/tracking, (3) storage,
 (4) aggregation, (5) classification, (6) pattern detection, (7) intervention
-+ UI, (8) testing/resilience/packaging. All eight are built. The intervention
-ladder ships **off**, and its switch stays disabled until enough history exists
-for a baseline.
+
+- UI, (8) testing/resilience/packaging. All eight are built. The intervention
+  ladder ships **off**, and its switch stays disabled until enough history exists
+  for a baseline.
 
 This file is the map. [`INTERNALS.md`](INTERNALS.md) is the territory — every
 constant, the scoring and baseline maths, the failure modes, and what the
@@ -45,7 +46,7 @@ instagram.com
 │  ├─ dom.ts          find containers; active   │
 │  │                  reel = straddles the      │
 │  │                  viewport midpoint         │
-│  ├─ detector.ts     dwell clock; excludes     │
+│  ├─ dwell-timer.ts     dwell clock; excludes     │
 │  │                  hidden time AND time      │
 │  │                  spent under an overlay    │
 │  ├─ extractor.ts    caption / hashtags /      │
@@ -106,13 +107,13 @@ the honest reason a day may look uneventful.
 
 ## Storage
 
-| Store | Key | Holds |
-|---|---|---|
-| `reelEvents` | `id` | One finished view. Indexed by `startedAt` and `sessionId`. |
-| `sessions` | `id` | Rolling totals, updated in the same transaction as the event. |
-| `dailyAggregates` | `YYYY-MM-DD` | Per-day rollups. Local-time buckets. |
-| `detectionLog` | `id` | Every pattern-detection decision, fired or not. |
-| `interventionLog` | `id` | Every interruption, and what the user did about it. |
+| Store             | Key          | Holds                                                         |
+| ----------------- | ------------ | ------------------------------------------------------------- |
+| `reelEvents`      | `id`         | One finished view. Indexed by `startedAt` and `sessionId`.    |
+| `sessions`        | `id`         | Rolling totals, updated in the same transaction as the event. |
+| `dailyAggregates` | `YYYY-MM-DD` | Per-day rollups. Local-time buckets.                          |
+| `detectionLog`    | `id`         | Every pattern-detection decision, fired or not.               |
+| `interventionLog` | `id`         | Every interruption, and what the user did about it.           |
 
 Settings live in `chrome.storage.local`, not IndexedDB: they are one small
 object, they fire change events the UI can subscribe to, and they survive
@@ -163,9 +164,8 @@ Events retain the caption, hashtags, and audio name they were scored from, so
 the lexicon can be tuned without discarding history: bump `LEXICON_VERSION`
 and stored events are re-scored and their aggregates rebuilt on next load.
 
-`local-ml` and `cloud-llm` modes exist in the settings type but fall back to
-the rules engine. Each is its own accuracy and privacy surface and is out of
-v1 scope.
+The reserved `local-ml` mode falls back to the rules engine and is outside
+v1 scope. Classification runs locally.
 
 ## Pattern detection
 
@@ -175,7 +175,7 @@ staging period possible, and it is kept now that the ladder exists: detection
 observes, `intervene.ts` decides separately whether to speak, and it does
 nothing at all unless `interventionEnabled` is on — which it is not by default.
 
-A flag requires both dominance in the recent window *and* a multiple of the
+A flag requires both dominance in the recent window _and_ a multiple of the
 user's own trailing rate for that category. Dominance alone would false-flag
 anyone whose ordinary diet runs heavy in a category, which is the failure mode
 the baseline exists to prevent.
@@ -201,12 +201,12 @@ person's scrolling before anything is allowed to act on them.
 
 ## Shared modules
 
-| File | Purpose |
-|------|---------|
-| `src/shared/types.ts` | `ReelEvent`, `Session`, `DailyAggregate`, `UserSettings` |
+| File                     | Purpose                                                                   |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `src/shared/types.ts`    | `ReelEvent`, `Session`, `DailyAggregate`, `UserSettings`                  |
 | `src/shared/messages.ts` | Typed `chrome.runtime` message routes — the extension's whole API surface |
-| `src/shared/taxonomy.ts` | Two-tier taxonomy: charged + topic categories |
-| `src/shared/defaults.ts` | `DEFAULT_SETTINGS` |
+| `src/shared/taxonomy.ts` | Two-tier taxonomy: charged + topic categories                             |
+| `src/shared/defaults.ts` | `DEFAULT_SETTINGS`                                                        |
 
 ## Design decisions
 
@@ -230,9 +230,9 @@ person's scrolling before anything is allowed to act on them.
   so watch-time rules are unit-testable without stubbing browser observers.
 - **Never select on Meta's generated class names** (`x1lliihq`, …). Every
   selector is anchored on `aria-label`, `dir`, `role`, or an `href` prefix.
-- **The taxonomy is closed-ended and two-tier.** *Charged* categories (sad,
+- **The taxonomy is closed-ended and two-tier.** _Charged_ categories (sad,
   breakup, anxious, angry, joyful, motivational, romantic) are emotional
-  registers and are the only ones detection acts on. *Topic* categories
+  registers and are the only ones detection acts on. _Topic_ categories
   (comedy, food, sports, music…) exist to name the rest of the feed so
   ordinary content does not fall into `neutral` — without them a normal reels
   feed is ~70% neutral. Detection measures dominance among **charged reels

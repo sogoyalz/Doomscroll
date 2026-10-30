@@ -1,6 +1,11 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { closeDB, getDailyAggregates, putDailyAggregate, recordReelView } from '../src/background/db.ts';
+import {
+  closeDB,
+  getDailyAggregates,
+  putDailyAggregate,
+  recordReelView,
+} from '../src/background/db.ts';
 import * as db from '../src/background/db.ts';
 import {
   AGGREGATE_ALARM,
@@ -8,6 +13,7 @@ import {
   DIRTY_DAYS_KEY,
   flushDirtyDays,
   markDayDirty,
+  recomputeAllDays,
   recomputeDay,
   scheduleAggregateFlush,
 } from '../src/background/aggregator.ts';
@@ -310,5 +316,61 @@ describe('a flush that fails partway', () => {
     await seedDays(['2026-08-01', '2026-08-02']);
     await flushDirtyDays();
     expect(store[DIRTY_DAYS_KEY]).toEqual([]);
+  });
+});
+
+describe('recomputeAllDays', () => {
+  const MIN = 60_000;
+
+  /** Two clusters five minutes apart, on each of two past days. */
+  async function twoClustersOn(y, m, d) {
+    const base = noon(y, m, d);
+    for (const offset of [0, MIN, 2 * MIN, 7 * MIN, 8 * MIN]) {
+      await recordReelView(makeEvent(base + offset, 5000));
+    }
+  }
+
+  it('rewrites every past day against a new session gap', async () => {
+    await twoClustersOn(2026, 8, 7);
+    await twoClustersOn(2026, 8, 8);
+    await backfillMissingAggregates(2 * MIN);
+
+    const before = await getDailyAggregates('2026-08-07', '2026-08-08');
+    expect(before).toHaveLength(2);
+    // Two separate binges at a two-minute gap.
+    expect(before.every((a) => a.longestBingeMs === 2 * MIN + 5000)).toBe(true);
+
+    await recomputeAllDays(10 * MIN);
+
+    const after = await getDailyAggregates('2026-08-07', '2026-08-08');
+    // One continuous binge at a ten-minute gap. This is the number the
+    // dashboard shows, and before this existed it stayed at the old value
+    // forever: only today was recomputed, and backfill skips days that
+    // already have an aggregate.
+    expect(after.every((a) => a.longestBingeMs === 8 * MIN + 5000)).toBe(true);
+  });
+
+  it('leaves days whose events have been pruned alone', async () => {
+    // Their aggregate outlives the events it came from, so there is nothing
+    // to recompute it against — a rebuild would zero it.
+    await putDailyAggregate({
+      date: '2020-01-01',
+      totalReels: 40,
+      totalMinutes: 12,
+      avgReelsPerSec: 0.05,
+      longestBingeMs: 600_000,
+      categoryBreakdown: { sad: 40 },
+    });
+    await twoClustersOn(2026, 8, 7);
+
+    await recomputeAllDays(10 * MIN);
+
+    const [old] = await getDailyAggregates('2020-01-01', '2020-01-01');
+    expect(old.totalReels).toBe(40);
+    expect(old.longestBingeMs).toBe(600_000);
+  });
+
+  it('does nothing when there is no history', async () => {
+    await expect(recomputeAllDays(2 * MIN)).resolves.toEqual([]);
   });
 });

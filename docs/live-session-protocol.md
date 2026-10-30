@@ -42,17 +42,17 @@ artificially varied session hides exactly the "the feed locked onto one thing"
 behaviour the detector is built for. Somewhere in the run, do each of these
 once:
 
-| # | Action | What it exercises |
-|---|---|---|
-| 1 | Scroll ~50 reels at a normal pace | The dwell tracker and the midpoint pick |
-| 2 | Let one reel play through 3+ loops | `MAX_DWELL_MS` clamping |
-| 3 | Flick past 5 reels fast without watching | `MIN_DWELL_MS` dropping short views |
-| 4 | Switch to another tab for ~30s, come back | `visibilitychange` pause/resume |
-| 5 | Switch to another tab for 3+ minutes | `MAX_HIDDEN_MS` finalizing the view |
-| 6 | Navigate to a profile, then back to Reels | Scroll-container rebinding |
-| 7 | Open a reel from Explore rather than the feed | A second feed layout |
-| 8 | Let the machine sleep briefly, wake it | Clock jumps in the dwell tracker |
-| 9 | Pause tracking from the popup, scroll, resume | `discard()`, not `flush()` |
+| #   | Action                                        | What it exercises                       |
+| --- | --------------------------------------------- | --------------------------------------- |
+| 1   | Scroll ~50 reels at a normal pace             | The dwell tracker and the midpoint pick |
+| 2   | Let one reel play through 3+ loops            | `MAX_DWELL_MS` clamping                 |
+| 3   | Flick past 5 reels fast without watching      | `MIN_DWELL_MS` dropping short views     |
+| 4   | Switch to another tab for ~30s, come back     | `visibilitychange` pause/resume         |
+| 5   | Switch to another tab for 3+ minutes          | `MAX_HIDDEN_MS` finalizing the view     |
+| 6   | Navigate to a profile, then back to Reels     | Scroll-container rebinding              |
+| 7   | Open a reel from Explore rather than the feed | A second feed layout                    |
+| 8   | Let the machine sleep briefly, wake it        | Clock jumps in the dwell tracker        |
+| 9   | Pause tracking from the popup, scroll, resume | `discard()`, not `flush()`              |
 
 Watch the panel as you go. The things worth stopping for:
 
@@ -69,10 +69,17 @@ Watch the panel as you go. The things worth stopping for:
 
 ## Afterwards
 
-1. **Panel count vs. stored count.** The panel's `reels:` total should match
-   the popup's reel count for today, allowing for reels watched before the
-   session. A large shortfall means views are being dropped between the content
-   script and the worker.
+1. **Capture, acknowledgement, and stored counts.** Before scrolling, note the
+   popup's count for today and the panel's `reels`, `saved`, and `skipped` counts.
+   Use one Instagram tab and stay within the same local day. Independently count
+   completed views above the 250ms dwell threshold, then stop scrolling and let
+   replies settle. The increase in `saved` must match the popup's increase and
+   the independently counted views. `skipped` means the worker deliberately
+   discarded a view after pause or deletion; it is not a saved view.
+   `unconfirmed` means no successful worker acknowledgement has arrived. A
+   durable retry may later save that view without updating this page's counter,
+   so investigate it using stored counts; do not equate it with confirmed loss.
+   Counts reset on page reload and cover only this tab's current page lifetime.
 2. **Extraction health.** Settings → Extraction health. Expect creator name and
    reel ID above 90%. Text will be lower — roughly a quarter of reels carry no
    text at all, which is a property of the feed, not a fault. Note which audio
@@ -85,7 +92,7 @@ Watch the panel as you go. The things worth stopping for:
    - `authorHandle` is populated.
 4. **Detection log.** Settings → detection log. Entries should exist even
    though nothing fired; `insufficient-history` is the expected reason until
-   seven days of history exist.
+   the configured baseline history and sample requirements are met.
 5. **Console.** One `content script loaded` line per Instagram tab and a
    non-zero `found N reel container(s)`. Zero containers on a reels page is the
    single most diagnostic line in the extension.
@@ -119,12 +126,14 @@ block level means scrolling twenty consecutive sad reels on purpose.
    outcome it does not produce. Navigate back to `/reels/` and confirm the
    break reminder appears with the remaining time, then use **End it, I'm
    good** and check the break shows as broken early.
-5. Dismiss another with **Keep scrolling**, then check Settings → *Did
-   interrupting help?*. Both should be recorded, nothing should sit at "no
-   answer" except interruptions you genuinely left alone, and **breaks held**
-   should show one of yours as broken.
+5. Dismiss another with **Keep scrolling**, then check Settings → _Did
+   interrupting help?_. Both should be recorded, nothing should sit at "no
+   answer" except interruptions you genuinely left alone. The early end should
+   be recorded. Elapsed windows without an early end are not proof that the
+   person stayed away.
 6. Take a break and simply leave Instagram for the full window. It should show
-   as held, and returning after the window should not count against it.
+   no early end recorded, and returning after the window should not count
+   against it.
 7. Close the tab while an overlay is up. That row should stay at "no answer" —
    the record is written before the overlay is shown precisely so a delivery
    that never landed is still counted.

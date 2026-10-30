@@ -21,7 +21,7 @@ const dwell = vi.hoisted(() => ({
   flush: vi.fn(),
   discard: vi.fn(),
 }));
-vi.mock('../src/content/detector.ts', async (importOriginal) => ({
+vi.mock('../src/content/dwell-timer.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   createDwellTracker: () => dwell,
 }));
@@ -41,15 +41,25 @@ let sendMessage;
 
 globalThis.chrome = {
   runtime: {
-    onMessage: { addListener: (fn) => { listener = fn; } },
+    onMessage: {
+      addListener: (fn) => {
+        listener = fn;
+      },
+    },
     sendMessage: (...args) => sendMessage(...args),
     getURL: (p) => p,
   },
   storage: {
     local: {
-      async get(key) { return key in store ? { [key]: store[key] } : {}; },
-      async set(entries) { Object.assign(store, entries); },
-      async remove(key) { delete store[key]; },
+      async get(key) {
+        return key in store ? { [key]: store[key] } : {};
+      },
+      async set(entries) {
+        Object.assign(store, entries);
+      },
+      async remove(key) {
+        delete store[key];
+      },
     },
     onChanged: { addListener() {} },
   },

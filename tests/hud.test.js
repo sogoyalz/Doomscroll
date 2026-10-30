@@ -4,12 +4,12 @@ import { BRIDGE_STATUS_ATTR } from '../src/content/dom.ts';
 
 function reel(overrides = {}) {
   return {
-    shortcode: 'SYNTH-00001',
-    identity: 'SYNTH-00001',
+    shortcode: 'Dbv6giIR-kt',
+    identity: 'Dbv6giIR-kt',
     captionText: 'a caption',
     hashtags: ['fyp'],
-    audioName: 'Sample Artist · Sample Track',
-    authorHandle: 'samplecreator',
+    audioName: 'Nikk · Nakhre Tere',
+    authorHandle: 'sakshiandsid',
     shortcodeSource: 'fiber',
     audioChannel: 'href-reels-audio',
     ...overrides,
@@ -64,7 +64,7 @@ describe('pushHudRow', () => {
   it('shows the reel identity and the channel that produced it', () => {
     mountHud();
     pushHudRow(reel(), 4200);
-    expect(panelText()).toContain('SYNTH-00001');
+    expect(panelText()).toContain('Dbv6giIR-kt');
     expect(panelText()).toContain('fiber');
   });
 
@@ -72,7 +72,10 @@ describe('pushHudRow', () => {
     // The signal a live session exists to catch: tracking still works, but
     // identity has quietly stopped surviving CDN rotation.
     mountHud();
-    pushHudRow(reel({ shortcode: null, identity: 'creator|abc.mp4', shortcodeSource: 'fallback' }), 3000);
+    pushHudRow(
+      reel({ shortcode: null, identity: 'creator|abc.mp4', shortcodeSource: 'fallback' }),
+      3000,
+    );
     expect(panelText()).toContain('fallback');
     expect(panelText()).toContain('creator|abc.mp4');
   });
@@ -131,4 +134,48 @@ describe('pushHudRow', () => {
   it('does nothing harmful when the panel is not mounted', () => {
     expect(() => pushHudRow(reel(), 3000)).not.toThrow();
   });
+});
+
+describe('the running total survives the panel being closed', () => {
+  // This module has always honoured its own promise — "turning the HUD on
+  // mid-session shows a running total rather than restarting from zero" —
+  // and render() already no-ops while unmounted. The half that did not was
+  // the caller in content/index.ts, which returned before counting unless the
+  // panel was up. Pinned here because the protocol's first check compares
+  // this number against the popup's, so a silent reset reads as dropped
+  // views rather than as a closed panel.
+  it('counts reels watched while the panel was closed', () => {
+    const reel = {
+      identity: 'abc',
+      shortcodeSource: 'fiber',
+      captionText: 'x',
+      hashtags: [],
+      audioName: null,
+      authorHandle: 'someone',
+      audioChannel: null,
+    };
+
+    mountHud();
+    pushHudRow(reel, 5000);
+    unmountHud();
+
+    pushHudRow(reel, 5000);
+    pushHudRow(reel, 5000);
+
+    mountHud();
+    expect(panelText()).toContain('reels: 3');
+  });
+});
+
+it('separates capture from confirmed storage and deliberate discards', async () => {
+  vi.resetModules();
+  const hud = await import('../src/content/hud.ts');
+  hud.pushHudRow(reel(), 3000);
+  hud.pushHudRow(reel(), 3000);
+  hud.pushHudRow(reel(), 3000);
+  hud.confirmHudDelivery(true);
+  hud.confirmHudDelivery(false);
+  hud.mountHud();
+  expect(panelText()).toContain('reels: 3  saved: 1  skipped: 1  unconfirmed: 1');
+  hud.unmountHud();
 });

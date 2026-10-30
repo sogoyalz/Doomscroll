@@ -1,9 +1,9 @@
 // Sanitized Instagram Reels DOM snapshot.
 //
-// Mirrors the generalized structure recorded in docs/dom-notes.md.
-// Handles, captions, audio names, shortcodes, and media URLs are invented;
-// the STRUCTURE is what is under test — element nesting, aria-labels, dir
-// attributes, and href prefixes.
+// Mirrors the structure recorded in docs/dom-notes.md from a live session.
+// Handles, captions, and media URLs are invented; the STRUCTURE is what is
+// under test — element nesting, aria-labels, dir attributes, and href
+// prefixes.
 //
 // The class names below are intentionally present and intentionally
 // meaningless. Meta generates them per deploy and per A/B cohort, so any
@@ -16,35 +16,35 @@
 const REELS = [
   {
     handle: 'creatorone',
-    caption: 'Synthetic warning caption',
-    hashtags: ['demo', 'animation'],
-    audio: 'Sample Artist · Sample Track',
+    caption: 'Be careful out there',
+    hashtags: ['fyp', 'animation'],
+    audio: 'Nikk · Nakhre Tere',
     video: 'https://scontent.example.com/v/t50/abc123.mp4?efg=1&oh=xyz',
-    shortcode: 'SYNTH-00001',
+    shortcode: 'Dbv6giIR-kt',
   },
   {
     handle: 'creatortwo',
-    caption: 'Synthetic caption without tags',
+    caption: 'no tags on this one',
     hashtags: [],
-    audio: 'Demo Artist · Demo Track',
+    audio: 'Udit Narayan · Main Nikla Gaddi Leke',
     video: 'https://scontent.example.com/v/t50/def456.mp4?efg=2',
-    shortcode: 'SYNTH-00002',
+    shortcode: 'DbulWnWt84U',
   },
   {
     // Original audio: Instagram renders no /reels/audio/ link at all.
     handle: 'creatorthree',
-    caption: 'Synthetic original-audio caption #original',
+    caption: 'made this myself #original',
     hashtags: ['original'],
     audio: null,
     video: 'https://scontent.example.com/v/t50/ghi789.mp4',
-    shortcode: 'SYNTH-00003',
+    shortcode: 'Dbv09skzdAv',
   },
   {
-    // Synthetic captionless edge case.
+    // Captionless — observed on reel DbwDVj4y8X8.
     handle: 'creatorfour',
     caption: null,
     hashtags: [],
-    audio: 'Example Duo · Example Song',
+    audio: 'King, Seedhe Maut · KODAK',
     video: 'https://scontent.example.com/v/t50/jkl012.mp4',
     shortcode: null,
   },
@@ -61,7 +61,10 @@ const REELS = [
 
 function hashtagLinks(tags) {
   return tags
-    .map((tag) => `<a class="x1i10hfl xjbqb8w" href="/explore/tags/${tag}/" role="link">#${tag}</a>`)
+    .map(
+      (tag) =>
+        `<a class="x1i10hfl xjbqb8w" href="/explore/tags/${tag}/" role="link">#${tag}</a>`,
+    )
     .join('');
 }
 
@@ -125,15 +128,16 @@ export const FEED_HTML = `
     </div>
   </div>`;
 
-const VIEWPORT_HEIGHT = 900;
-const REEL_HEIGHT = 840;
+const VIEWPORT_HEIGHT = 861;
+const REEL_HEIGHT = 830;
 
 /**
  * Mounts the fixture and fakes the layout jsdom does not compute.
  *
  * jsdom reports every rect and scroll dimension as zero, so both the
  * active-reel geometry and the scroll-container search need stubbing to test
- * anything real. Reels are stacked roughly one synthetic viewport apart.
+ * anything real. Reels are stacked one screen apart, matching the ~805–861px
+ * spacing observed live.
  *
  * `scrollTo(index)` positions the feed so that reel's container straddles the
  * viewport midpoint.
@@ -157,7 +161,9 @@ export function mountFeed(doc = document, win = window) {
     configurable: true,
   });
 
-  const containers = [...doc.querySelectorAll('[data-doomscroll-shortcode], #scroll-container > div')];
+  const containers = [
+    ...doc.querySelectorAll('[data-doomscroll-shortcode], #scroll-container > div'),
+  ];
 
   let offset = 0;
   const applyRects = () => {

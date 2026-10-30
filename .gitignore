@@ -23,3 +23,13 @@ doomscroll-*.zip
 credentials*
 cookies*
 instagram-*/
+
+# Browser test artifacts and isolated test profiles
+test-results/
+playwright-report/
+doomscroll-*.zip.sha256
+
+# Local-only legacy workspace backup and editor metadata
+.workspace-backup/
+.dev/
+.code-review-graph/

@@ -16,7 +16,7 @@
 
 import { UNCLASSIFIED } from './aggregation.js';
 import { isCharged } from './taxonomy.js';
-import { localDateKey, localDayRange } from './time.js';
+import { localDateKey, localDayRange, startOfLocalDayBefore } from './time.js';
 import type { DailyAggregate, ReelEvent } from './types.js';
 
 /**
@@ -316,11 +316,30 @@ export function chargedBaselineShares(
   return { shares, charged };
 }
 
-function dominantOf(shares: Record<string, number>): { category: string; share: number } | null {
+/** Shared readiness rule for dashboard controls and their progress labels. */
+export function baselineStatus(aggregates: DailyAggregate[], now = Date.now()) {
+  const today = localDateKey(now);
+  const from = localDateKey(startOfLocalDayBefore(now, BASELINE_WINDOW_DAYS));
+  const days = aggregates.filter(
+    (day) => day.date >= from && day.date < today && day.totalReels > 0,
+  );
+  const sample = chargedBaselineShares(days, now).charged;
+  return {
+    days: days.length,
+    sample,
+    ready: days.length >= MIN_BASELINE_DAYS && sample >= MIN_BASELINE_SAMPLE,
+  };
+}
+
+function dominantOf(
+  shares: Record<string, number>,
+): { category: string; share: number } | null {
   let best: { category: string; share: number } | null = null;
   // Object.entries order is insertion order, which is not meaningful here, so
   // ties are broken alphabetically to keep the result deterministic.
-  for (const [category, share] of Object.entries(shares).sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [category, share] of Object.entries(shares).sort(([a], [b]) =>
+    a.localeCompare(b),
+  )) {
     if (!best || share > best.share) best = { category, share };
   }
   return best;
@@ -352,6 +371,7 @@ export function detectPattern(
   config: DetectionConfig,
   now: number = Date.now(),
 ): PatternDetection {
+  baselineDays = baselineDays.filter((day) => day.totalReels > 0);
   if (baselineDays.length < MIN_BASELINE_DAYS) {
     return { ...EMPTY, reason: 'insufficient-history' };
   }
@@ -368,7 +388,10 @@ export function detectPattern(
   // real content but not what intervention is about, so they leave the
   // denominator just as unclassified always has.
   const { shares, charged: chargedSample } = chargedShares(counts);
-  const { shares: baseline, charged: baselineSample } = chargedBaselineShares(baselineDays, now);
+  const { shares: baseline, charged: baselineSample } = chargedBaselineShares(
+    baselineDays,
+    now,
+  );
 
   if (baselineSample < MIN_BASELINE_SAMPLE) {
     return {

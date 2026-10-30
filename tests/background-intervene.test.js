@@ -44,6 +44,7 @@ globalThis.chrome = {
     async sendMessage(tabId, message) {
       if (tabSendFails) throw new Error('receiving end does not exist');
       tabMessages.push({ tabId, message });
+      return { ok: true, data: { shown: true } };
     },
   },
   runtime: { getURL: (p) => `chrome-extension://test/${p}` },
@@ -155,9 +156,21 @@ describe('maybeIntervene', () => {
       42,
       NOW,
     );
-    expect(level).toBe('overlay');
+    expect(level).toBeNull();
     const [entry] = await getInterventionLog();
     expect(entry.outcome).toBe('pending');
+    expect(entry.deliveredAt).toBeNull();
+    expect((await readState()).firedInSession).toEqual([]);
+    tabSendFails = false;
+    expect(
+      await maybeIntervene(
+        detection({ streak: LEVELS.overlayAfterStreak }),
+        on,
+        'session-1',
+        42,
+        NOW + 1000,
+      ),
+    ).toBe('overlay');
   });
 
   it('does not interrupt twice for the same level in one session', async () => {
@@ -201,7 +214,7 @@ describe('maybeIntervene', () => {
     chrome.notifications.create = () => Promise.reject(new Error('no permission'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    await expect(maybeIntervene(detection(), on, 'session-1', 1, NOW)).resolves.toBe('notify');
+    await expect(maybeIntervene(detection(), on, 'session-1', 1, NOW)).resolves.toBeNull();
 
     warn.mockRestore();
     chrome.notifications.create = create;

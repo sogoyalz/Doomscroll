@@ -114,7 +114,10 @@ describe('categoryBreakdown', () => {
   it('buckets unclassified events separately from neutral', () => {
     // Conflating "nothing looked yet" with "looked and found nothing" would
     // let a day of unreadable reels read as a genuinely calm one.
-    const events = [ev({ startedAt: 0, category: null }), ev({ startedAt: 1, category: 'neutral' })];
+    const events = [
+      ev({ startedAt: 0, category: null }),
+      ev({ startedAt: 1, category: 'neutral' }),
+    ];
     expect(categoryBreakdown(events)).toEqual({ [UNCLASSIFIED]: 1, neutral: 1 });
   });
 
@@ -128,7 +131,10 @@ describe('groupByLocalDay', () => {
     const beforeMidnight = new Date(2026, 7, 7, 23, 30).getTime();
     const afterMidnight = new Date(2026, 7, 8, 0, 15).getTime();
 
-    const days = groupByLocalDay([ev({ startedAt: beforeMidnight }), ev({ startedAt: afterMidnight })]);
+    const days = groupByLocalDay([
+      ev({ startedAt: beforeMidnight }),
+      ev({ startedAt: afterMidnight }),
+    ]);
 
     expect([...days.keys()].sort()).toEqual(['2026-08-07', '2026-08-08']);
     expect(days.get('2026-08-07')).toHaveLength(1);

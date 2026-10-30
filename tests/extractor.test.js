@@ -18,7 +18,7 @@ import { SHORTCODE_ATTR } from '../src/content/dom.ts';
 // only, with Meta's generated class names deliberately omitted since nothing
 // may select on them.
 function buildContainer({
-  author = 'samplecreator',
+  author = 'sakshiandsid',
   caption = null,
   hashtags = [],
   audio = null,
@@ -79,7 +79,7 @@ describe('extractCaption', () => {
   });
 
   it('returns null when the reel has no caption element', () => {
-    // A synthetic captionless case has no caption element at all.
+    // Reel DbwDVj4y8X8 in the sample data had no caption at all.
     expect(extractCaption(buildContainer())).toBeNull();
   });
 
@@ -87,7 +87,7 @@ describe('extractCaption', () => {
     const c = buildContainer();
     const span = document.createElement('span');
     span.setAttribute('dir', 'auto');
-    span.textContent = 'samplecreator';
+    span.textContent = 'sakshiandsid';
     c.appendChild(span);
     expect(extractCaption(c)).toBeNull();
   });
@@ -116,8 +116,8 @@ describe('extractHashtags', () => {
 
 describe('extractAudioName', () => {
   it('takes only the first line, since the marquee duplicates the text', () => {
-    const c = buildContainer({ audio: 'Sample Artist · Sample Track' });
-    expect(extractAudioName(c)).toBe('Sample Artist · Sample Track');
+    const c = buildContainer({ audio: 'Nikk · Nakhre Tere' });
+    expect(extractAudioName(c)).toBe('Nikk · Nakhre Tere');
   });
 
   it('returns null for original-audio reels with no audio link', () => {
@@ -127,7 +127,9 @@ describe('extractAudioName', () => {
 
 describe('extractAuthorHandle', () => {
   it('strips the " reels" suffix from the aria-label', () => {
-    expect(extractAuthorHandle(buildContainer({ author: 'samplecreator' }))).toBe('samplecreator');
+    expect(extractAuthorHandle(buildContainer({ author: 'sakshiandsid' }))).toBe(
+      'sakshiandsid',
+    );
   });
 
   it('falls back to the href when aria-label is missing', () => {
@@ -145,10 +147,10 @@ describe('extractAuthorHandle', () => {
 
 describe('extractReel identity', () => {
   it('uses the shortcode published by the MAIN-world bridge', () => {
-    const c = buildContainer({ shortcode: 'SYNTH-00001' });
+    const c = buildContainer({ shortcode: 'Dbv6giIR-kt' });
     const reel = extractReel(c);
-    expect(reel.shortcode).toBe('SYNTH-00001');
-    expect(reel.identity).toBe('SYNTH-00001');
+    expect(reel.shortcode).toBe('Dbv6giIR-kt');
+    expect(reel.identity).toBe('Dbv6giIR-kt');
   });
 
   it('falls back to author|video-basename when no shortcode resolved', () => {
@@ -187,10 +189,10 @@ describe('mergeExtractions', () => {
   };
 
   it('adopts a shortcode that resolved after activation', () => {
-    const later = { ...base, shortcode: 'SYNTH-00001', captionText: 'next reel caption' };
+    const later = { ...base, shortcode: 'Dbv6giIR-kt', captionText: 'next reel caption' };
     const merged = mergeExtractions(base, later);
-    expect(merged.shortcode).toBe('SYNTH-00001');
-    expect(merged.identity).toBe('SYNTH-00001');
+    expect(merged.shortcode).toBe('Dbv6giIR-kt');
+    expect(merged.identity).toBe('Dbv6giIR-kt');
     // Text must stay from the snapshot — the container may hold the next reel.
     expect(merged.captionText).toBe('original caption');
   });
@@ -203,6 +205,55 @@ describe('mergeExtractions', () => {
 
   it('returns the snapshot unchanged when the container is gone', () => {
     expect(mergeExtractions(base, null)).toEqual(base);
+  });
+
+  // The caller only supplies `later` once isSameReel has confirmed the
+  // container still holds this reel, so a field the snapshot missed and the
+  // later read has belongs to this reel. It used to be dropped: only the
+  // shortcode was taken, and a reel watched for less than one heartbeat never
+  // got a reconcile pass either, so it was logged as text-free with its
+  // caption sitting in the DOM. That inflated both the textless rate and the
+  // audio-dark rate the health panel raises alarms on.
+  it('recovers text that had not rendered when the snapshot was taken', () => {
+    const snapshot = {
+      ...base,
+      shortcode: 'Dbv6giIR-kt',
+      identity: 'Dbv6giIR-kt',
+      captionText: null,
+      hashtags: [],
+      audioName: null,
+      audioChannel: null,
+    };
+    const later = {
+      ...snapshot,
+      captionText: 'i miss her every single day',
+      hashtags: ['breakup'],
+      audioName: 'sad song',
+      audioChannel: 'href-reels-audio',
+    };
+
+    const merged = mergeExtractions(snapshot, later);
+
+    expect(merged.captionText).toBe('i miss her every single day');
+    expect(merged.hashtags).toEqual(['breakup']);
+    expect(merged.audioName).toBe('sad song');
+    expect(merged.audioChannel).toBe('href-reels-audio');
+  });
+
+  it('still refuses to overwrite text the snapshot already had', () => {
+    // The original reason for the narrow merge, and it has to survive: a
+    // recycled container that slipped past isSameReel must not graft the
+    // incoming reel's caption onto the outgoing reel's watch time.
+    const later = { ...base, captionText: 'next reel caption', audioName: 'next audio' };
+
+    expect(mergeExtractions(base, later).captionText).toBe('original caption');
+  });
+
+  it('keeps the author the snapshot resolved', () => {
+    const snapshot = { ...base, authorHandle: null };
+    const later = { ...base, authorHandle: 'someone' };
+
+    expect(mergeExtractions(snapshot, later).authorHandle).toBe('someone');
   });
 });
 
@@ -238,12 +289,57 @@ describe('isSameReel', () => {
     expect(isSameReel(reel(null, 'someone|abc.mp4'), reel(null, 'someone|abc.mp4'))).toBe(true);
     expect(isSameReel(reel(null, 'someone|abc.mp4'), reel(null, 'other|xyz.mp4'))).toBe(false);
   });
+
+  it('separates recycled reels by the same creator when only one has a shortcode', () => {
+    const container = buildContainer({ caption: 'old caption', videoSrc: '/old.mp4' });
+    const before = extractReel(container);
+    container.querySelector('video').setAttribute('src', '/new.mp4');
+    container.querySelector('div[dir="auto"]').textContent = 'new caption';
+    container.setAttribute(SHORTCODE_ATTR, 'NEW_REEL');
+    const after = extractReel(container);
+
+    expect(isSameReel(before, after)).toBe(false);
+    expect(isSameReel(after, before)).toBe(false);
+    const later = isSameReel(before, after) ? after : null;
+    expect(mergeExtractions(before, later)).toEqual(before);
+  });
+
+  it('keeps the same reel when its shortcode resolves and its video is unchanged', () => {
+    const container = buildContainer({ videoSrc: '/video.mp4?token=old' });
+    const before = extractReel(container);
+    container.querySelector('video').setAttribute('src', '/video.mp4?token=new');
+    container.setAttribute(SHORTCODE_ATTR, 'SAME_REEL');
+    const after = extractReel(container);
+
+    expect(isSameReel(before, after)).toBe(true);
+    expect(isSameReel(after, before)).toBe(true);
+    expect(mergeExtractions(before, after).identity).toBe('SAME_REEL');
+  });
 });
 
 describe('audio extraction fallbacks', () => {
+  it('skips empty rendered responsive copies before the readable audio link', () => {
+    const c = buildContainer({ audio: 'Example Artist · Example Track' });
+    const readable = c.querySelector('a[href*="/audio/"]');
+    const hidden = readable.cloneNode(true);
+    for (const el of [hidden, ...hidden.querySelectorAll('*')]) {
+      Object.defineProperty(el, 'innerText', { value: '' });
+    }
+    readable.before(hidden);
+    expect(extractAudioName(c)).toBe('Example Artist · Example Track');
+  });
+
+  it('skips an image-only audio link before a readable attribution', () => {
+    const c = buildContainer({ audio: 'Example Artist · Example Track' });
+    const empty = document.createElement('a');
+    empty.href = '/reels/audio/12345/';
+    c.prepend(empty);
+    expect(extractAudioName(c)).toBe('Example Artist · Example Track');
+  });
+
   it('reads audio from the /reels/audio/ anchor', () => {
-    expect(extractAudioName(buildContainer({ audio: 'Sample Artist · Sample Track' }))).toBe(
-      'Sample Artist · Sample Track',
+    expect(extractAudioName(buildContainer({ audio: 'Nikk · Nakhre Tere' }))).toBe(
+      'Nikk · Nakhre Tere',
     );
   });
 
@@ -269,6 +365,7 @@ describe('isIncomplete', () => {
   const reel = (over = {}) => ({
     shortcode: 'AAA',
     identity: 'AAA',
+    videoBasename: 'abc.mp4',
     captionText: 'hi',
     hashtags: ['x'],
     audioName: 'a · b',
@@ -284,6 +381,17 @@ describe('isIncomplete', () => {
     expect(isIncomplete(reel({ captionText: null }))).toBe(true);
     expect(isIncomplete(reel({ audioName: null }))).toBe(true);
     expect(isIncomplete(reel({ hashtags: [] }))).toBe(true);
+  });
+
+  it('keeps checking when the video has not resolved yet', () => {
+    const before = reel({ videoBasename: null });
+    expect(isIncomplete(before)).toBe(true);
+    const hydrated = fillMissingFields(before, reel());
+    expect(hydrated.videoBasename).toBe('abc.mp4');
+    expect(isIncomplete(hydrated)).toBe(false);
+    expect(
+      fillMissingFields(hydrated, reel({ videoBasename: 'other.mp4' })).videoBasename,
+    ).toBe('abc.mp4');
   });
 });
 
@@ -315,7 +423,10 @@ describe('fillMissingFields', () => {
 
   it('keeps the snapshot value where it already had one', () => {
     const before = snap({ captionText: 'original' });
-    const merged = fillMissingFields(before, { ...before, captionText: 'later different text' });
+    const merged = fillMissingFields(before, {
+      ...before,
+      captionText: 'later different text',
+    });
     expect(merged.captionText).toBe('original');
   });
 
@@ -431,34 +542,42 @@ describe('recycling vs late shortcode tagging', () => {
       audioName: null,
       authorHandle: null,
     };
-    const after = withAuthor({ shortcode: 'CCCCCC', identity: 'CCCCCC', authorHandle: 'creatorC' });
+    const after = withAuthor({
+      shortcode: 'CCCCCC',
+      identity: 'CCCCCC',
+      authorHandle: 'creatorC',
+    });
     expect(isSameReel(before, after)).toBe(true);
   });
 });
 
 describe('shortcodeSource', () => {
   it('reports fiber when the MAIN-world bridge tagged the container', () => {
-    expect(extractReel(buildContainer({ shortcode: 'SYNTH-00001' })).shortcodeSource).toBe('fiber');
+    expect(extractReel(buildContainer({ shortcode: 'Dbv6giIR-kt' })).shortcodeSource).toBe(
+      'fiber',
+    );
   });
 
   it('reports fallback when identity had to be derived', () => {
     const reel = extractReel(buildContainer({ videoSrc: 'https://cdn/abc.mp4' }));
     expect(reel.shortcodeSource).toBe('fallback');
-    expect(reel.identity).toBe('samplecreator|abc.mp4');
+    expect(reel.identity).toBe('sakshiandsid|abc.mp4');
   });
 
   it('flips to fiber when a late tag supplies the shortcode', () => {
     // The bridge can tag a container after the snapshot was taken. The stored
     // identity becomes fiber-derived, so the counter must agree.
     const before = extractReel(buildContainer({ videoSrc: 'https://cdn/abc.mp4' }));
-    const after = extractReel(buildContainer({ shortcode: 'SYNTH-00001' }));
+    const after = extractReel(buildContainer({ shortcode: 'Dbv6giIR-kt' }));
     expect(mergeExtractions(before, after).shortcodeSource).toBe('fiber');
     expect(fillMissingFields(before, after).shortcodeSource).toBe('fiber');
   });
 
   it('stays fallback when neither read resolved a shortcode', () => {
     const before = extractReel(buildContainer({ videoSrc: 'https://cdn/abc.mp4' }));
-    const after = extractReel(buildContainer({ videoSrc: 'https://cdn/abc.mp4', caption: 'hi' }));
+    const after = extractReel(
+      buildContainer({ videoSrc: 'https://cdn/abc.mp4', caption: 'hi' }),
+    );
     expect(fillMissingFields(before, after).shortcodeSource).toBe('fallback');
   });
 });
@@ -466,7 +585,7 @@ describe('shortcodeSource', () => {
 describe('audioChannel', () => {
   it('names the href selector that matched', () => {
     // The builder renders the historical /reels/audio/ anchor.
-    expect(extractReel(buildContainer({ audio: 'Sample Artist · Sample Track' })).audioChannel).toBe(
+    expect(extractReel(buildContainer({ audio: 'Nikk · Nakhre Tere' })).audioChannel).toBe(
       'href-reels-audio',
     );
   });
@@ -485,11 +604,11 @@ describe('audioChannel', () => {
     const row = document.createElement('div');
     row.innerHTML =
       '<svg aria-label="Audio image"></svg>' +
-      '<span dir="auto">Sample Artist · Sample Track\nSample Artist · Sample Track</span>';
+      '<span dir="auto">Nikk · Nakhre Tere\nNikk · Nakhre Tere</span>';
     c.appendChild(row);
 
     const reel = extractReel(c);
-    expect(reel.audioName).toBe('Sample Artist · Sample Track');
+    expect(reel.audioName).toBe('Nikk · Nakhre Tere');
     expect(reel.audioChannel).toBe('icon');
   });
 
@@ -508,9 +627,9 @@ describe('audioChannel', () => {
 
   it('follows whichever read supplied the stored audio name', () => {
     const snapshot = extractReel(buildContainer({ audio: null }));
-    const fresh = extractReel(buildContainer({ audio: 'Demo Artist · Demo Track' }));
+    const fresh = extractReel(buildContainer({ audio: 'Udit Narayan · Main Nikla' }));
     const filled = fillMissingFields(snapshot, fresh);
-    expect(filled.audioName).toBe('Demo Artist · Demo Track');
+    expect(filled.audioName).toBe('Udit Narayan · Main Nikla');
     expect(filled.audioChannel).toBe('href-reels-audio');
   });
 });
@@ -582,9 +701,9 @@ describe('a feed where nothing can be identified', () => {
   });
 
   it('tells them apart by audio alone', () => {
-    expect(
-      isSameReel(nameless({ audioName: 'Wishes' }), nameless({ audioName: 'Hasa' })),
-    ).toBe(false);
+    expect(isSameReel(nameless({ audioName: 'Wishes' }), nameless({ audioName: 'Hasa' }))).toBe(
+      false,
+    );
   });
 
   it('still treats the same text as the same reel', () => {
@@ -605,9 +724,9 @@ describe('a feed where nothing can be identified', () => {
   });
 
   it('ignores whitespace-only text rather than treating it as a difference', () => {
-    expect(isSameReel(nameless({ captionText: '   ' }), nameless({ captionText: 'real' }))).toBe(
-      true,
-    );
+    expect(
+      isSameReel(nameless({ captionText: '   ' }), nameless({ captionText: 'real' })),
+    ).toBe(true);
   });
 
   it('does not let two fields run together into a false match', () => {

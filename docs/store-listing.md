@@ -17,17 +17,17 @@ one is narrow and matches: one site, one behaviour, no secondary features.
 
 Each must match `manifest.json` exactly. Copy verbatim into the form.
 
-| Permission | Justification |
-|---|---|
-| `storage` | Saves the user's settings and their local viewing history. No data leaves the device. |
-| `alarms` | Runs daily maintenance — rolling up statistics and deleting history older than 90 days. A Manifest V3 service worker is terminated when idle and cannot use `setTimeout` for scheduled work, so alarms are the only mechanism available. |
-| `notifications` | Shows the gentlest of the three optional break reminders. Off by default and unavailable until the extension has a week of the user's own history to compare against; the user turns it on in the extension's settings and can turn it off there. No notification is ever sent from a server — there is no server. |
-| `https://*.instagram.com/*` | Reads the caption, hashtags, and audio name of the reel currently on screen in order to categorise it. This is the only site the extension runs on, and it is excluded from `/direct/` and `/accounts/`. |
+| Permission                  | Justification                                                                                                                                                                                                                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `storage`                   | Saves the user's settings and their local viewing history. No data leaves the device.                                                                                                                                                                                                                              |
+| `alarms`                    | Runs daily maintenance — rolling up statistics and deleting history older than 90 days. A Manifest V3 service worker is terminated when idle and cannot use `setTimeout` for scheduled work, so alarms are the only mechanism available.                                                                           |
+| `notifications`             | Shows the gentlest of the three optional break reminders. Off by default and unavailable until the extension has a week of the user's own history to compare against; the user turns it on in the extension's settings and can turn it off there. No notification is ever sent from a server — there is no server. |
+| `https://*.instagram.com/*` | Reads the caption, hashtags, and audio name of the reel currently on screen in order to categorise it. This is the only site the extension runs on, and it is excluded from `/direct/` and `/accounts/`.                                                                                                           |
 
 **Remote code:** none. Everything executes from the packaged bundle; the
 extension makes no network requests of any kind.
 
-**Data usage disclosures:** tick *Personally identifiable information* — the
+**Data usage disclosures:** tick _Personally identifiable information_ — the
 fallback reel identifier includes the creator's Instagram handle. Then certify
 all three: data is not sold, not used for unrelated purposes, and not used to
 determine creditworthiness. All true; nothing is transmitted anywhere.
@@ -48,7 +48,7 @@ determine creditworthiness. All true; nothing is transmitted anywhere.
 >
 > It tracks watch time, reel count, scroll pace, and your longest unbroken
 > stretch. It reads each reel's caption, hashtags, and audio name to sort it
-> into one of eight categories, and shows the mix.
+> into one of twenty-one categories, and shows the mix.
 >
 > The part that matters: it watches for the feed locking onto one category and
 > serving it back. That judgement is made against YOUR OWN normal, not a fixed
@@ -75,21 +75,25 @@ determine creditworthiness. All true; nothing is transmitted anywhere.
 
 ## Assets needed
 
-| Asset | Requirement | Status |
-|---|---|---|
-| Icon | 128×128 PNG | have — `assets/icons/icon128.png` |
-| Screenshots | 1280×800 or 640×400, at least one, up to five | **TODO** |
-| Small promo tile | 440×280 | optional |
-| Privacy policy URL | publicly reachable | `https://sogoyalz.github.io/Doomscroll/PRIVACY` |
+| Asset              | Requirement                                   | Status                                                                                                 |
+| ------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Icon               | 128×128 PNG                                   | have — `assets/icons/icon128.png`                                                                      |
+| Screenshots        | 1280×800 or 640×400, at least one, up to five | Ready — `store-assets/dashboard-demo.png`, `store-assets/settings-demo.png` (synthetic data disclosed) |
+| Small promo tile   | 440×280                                       | optional                                                                                               |
+| Privacy policy URL | publicly reachable                            | `https://sogoyalz.github.io/Doomscroll/PRIVACY`                                                        |
 
 Suggested screenshots, in order: the popup with a populated day; the category
 mix with a clear dominant category; the options detection log; the "why so
 much neutral" tuning report.
 
-Take them with real data, not the mocked preview — reviewers can usually tell,
-and fabricated screenshots are grounds for removal.
+Use a clearly disclosed demonstration account or consented, redacted data.
+Never expose a tester’s viewing history, handles, or personal messages in public assets.
 
 ## Before submitting
+
+Complete every gate in [release-readiness.md](release-readiness.md), including
+live extraction validation and the opt-in beta. An archive building successfully
+is not evidence that these gates passed.
 
 - [x] Host `PRIVACY.md` at a public URL:
       `https://sogoyalz.github.io/Doomscroll/PRIVACY`.
@@ -99,7 +103,7 @@ and fabricated screenshots are grounds for removal.
 - [ ] Verify the built manifest declares no permission the code does not use.
       `npm run package` checks structure but not this — read it.
 - [ ] Test the packaged zip in a clean Chrome profile, not just the unpacked
-      `dist/`, and confirm it works on a Chrome at the declared minimum (111).
+      `dist/`, and confirm it works on a Chrome at the declared minimum (116).
 - [ ] Have the developer account's one-time fee paid and identity verified.
 
 ## Expect

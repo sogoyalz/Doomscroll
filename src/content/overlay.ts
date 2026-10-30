@@ -38,6 +38,73 @@ interface OverlayOptions {
 
 let host: HTMLElement | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
+let keyHandler: ((event: KeyboardEvent) => void) | null = null;
+
+/**
+ * Makes the card behave like the modal it declares itself to be.
+ *
+ * `role="dialog"` and `aria-modal="true"` are promises, and this used to keep
+ * neither. Escape did nothing — there was no key handling anywhere in the
+ * extension — and Tab walked straight out of the dialog into the Instagram
+ * page behind an opaque scrim, where a keyboard user was operating content
+ * they could not see. The host is appended to documentElement, so the dialog
+ * is LAST in tab order: getting back meant tabbing through all of Instagram.
+ *
+ * Bound on document in the capture phase because focus lives inside a shadow
+ * root — the event is retargeted on the way out, so the element identity is
+ * only readable from inside, which is why the cycle is computed against
+ * `root.activeElement` rather than the event target.
+ *
+ * `escapeAllowed` exists for the block level. Escape must not become a
+ * keyboard bypass of the one rung whose entire point is the delay, or the
+ * friction would apply to mouse users only.
+ */
+function trapKeyboard(options: {
+  root: ShadowRoot;
+  onEscape: () => void;
+  escapeAllowed: () => boolean;
+}): void {
+  releaseKeyboard();
+
+  keyHandler = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      if (!options.escapeAllowed()) return;
+      event.preventDefault();
+      options.onEscape();
+      return;
+    }
+
+    if (event.key !== 'Tab') return;
+
+    // Disabled buttons are excluded rather than skipped over: a trap that
+    // parks focus on a control that cannot be pressed is its own trap.
+    const focusable = [...options.root.querySelectorAll('button')].filter((b) => !b.disabled);
+    if (!focusable.length) return;
+
+    event.preventDefault();
+    const active = options.root.activeElement;
+    const index = active instanceof HTMLButtonElement ? focusable.indexOf(active) : -1;
+    const last = focusable.length - 1;
+
+    // Focus somewhere unexpected (or nowhere) enters at the near end rather
+    // than wrapping from a position it never held.
+    const next =
+      index === -1
+        ? event.shiftKey
+          ? focusable[last]
+          : focusable[0]
+        : focusable[(index + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length];
+
+    next?.focus();
+  };
+
+  document.addEventListener('keydown', keyHandler, true);
+}
+
+function releaseKeyboard(): void {
+  if (keyHandler) document.removeEventListener('keydown', keyHandler, true);
+  keyHandler = null;
+}
 
 const STYLE = `
   :host { all: initial; }
@@ -99,7 +166,7 @@ function pauseVideos(): void {
 /** What the pattern was, in words about the feed. */
 function describe(category: string | null, streak: number): string {
   const what = category ? `${category} content` : 'the same kind of content';
-  return `The last ${streak} reels in a row have been ${what} — well above what your feed usually serves you.`;
+  return `The last ${streak} classified reels in a row have been ${what} — well above what your feed usually serves you.`;
 }
 
 export function showOverlay(options: OverlayOptions): void {
@@ -180,6 +247,14 @@ export function showOverlay(options: OverlayOptions): void {
   // eventually remove a node it does not own.
   document.documentElement.append(host);
 
+  trapKeyboard({
+    root,
+    onEscape: () => finish(options, 'bypassed'),
+    // Escaping is the same choice as pressing "keep scrolling", so it is
+    // available exactly when that button is.
+    escapeAllowed: () => !keep.disabled,
+  });
+
   take.focus();
 }
 
@@ -197,6 +272,7 @@ function finish(options: OverlayOptions, action: DismissAction): void {
 
 export function hideOverlay(): void {
   clearTimer();
+  releaseKeyboard();
   host?.remove();
   host = null;
 }
@@ -272,6 +348,17 @@ export function showBreakReminder(options: {
   scrim.append(card);
   root.append(style, scrim);
   document.documentElement.append(host);
+
+  trapKeyboard({
+    root,
+    // Escaping a reminder is keeping the break. The user already asked for
+    // it, and dismissing the reminder is not a retraction of that.
+    onEscape: () => {
+      hideOverlay();
+      options.onKeep();
+    },
+    escapeAllowed: () => true,
+  });
 
   keep.focus();
 }

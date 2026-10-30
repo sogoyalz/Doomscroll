@@ -26,23 +26,60 @@ export type ShortcodeSource = 'fiber' | 'fallback';
 /**
  * Bridge liveness, published on <html> by the MAIN-world script.
  *
- * Separates the two ways the shortcode channel dies, which need different
- * fixes and look identical from the isolated world:
+ * Separates the ways the shortcode channel dies, which need different fixes
+ * and look identical from the isolated world:
  *
- * - `ok`     — the fiber key was found; shortcodes are resolving.
- * - `no-fiber` — containers exist but carry no `__reactFiber$` expando. React
- *   internals were renamed, or Instagram stopped rendering this tree in React.
+ * - `ok` — at least one container resolved a shortcode.
+ * - `no-fiber` — containers exist and NONE carries a `__reactFiber$` expando.
+ *   React internals were renamed, or Instagram stopped rendering this tree in
+ *   React. Conclusive on its own, which is why it must mean only this.
+ * - `no-code` — the fiber is there but no `media.code` was found on it. Two
+ *   very different things look like this: the props shape was renamed, and a
+ *   container that has mounted but not hydrated yet. The second is ordinary —
+ *   it happens at page load and whenever a fresh batch mounts mid-scroll — so
+ *   this is NOT evidence of a fault and must not be treated as conclusive.
+ *   `fallbackIdentityShare` over a full sample is the instrument for that.
  * - attribute absent — the MAIN-world script never ran at all (registration
- *   dropped from the manifest, injection blocked).
+ *   dropped from the manifest, injection blocked), or tracking is paused.
+ *
+ * `no-code` was split out of `no-fiber` after the two were found conflated:
+ * one reel completing during ordinary hydration raised a permanent "Reels
+ * aren't being identified reliably" alarm on a healthy feed.
  */
 export const BRIDGE_STATUS_ATTR = 'data-doomscroll-bridge';
 
-export type BridgeStatus = 'ok' | 'no-fiber' | 'absent';
+export type BridgeStatus = 'ok' | 'no-fiber' | 'no-code' | 'absent';
 
 /** Reads bridge liveness from the isolated world. */
 export function bridgeStatus(doc: Document = document): BridgeStatus {
   const value = doc.documentElement.getAttribute(BRIDGE_STATUS_ATTR);
-  return value === 'ok' || value === 'no-fiber' ? value : 'absent';
+  return value === 'ok' || value === 'no-fiber' || value === 'no-code' ? value : 'absent';
+}
+
+/**
+ * Whether tracking is on, published on <html> by the ISOLATED-world script.
+ *
+ * The MAIN world has no chrome.* at all, so it cannot read the setting that
+ * governs it. Without this it had no lifecycle controls of any kind and kept
+ * walking React fiber and writing attributes into Instagram's DOM after the
+ * user switched tracking off — while the options page promised "nothing is
+ * observed at all; the extension stops watching the page".
+ *
+ * Absent means paused until the isolated script has read the saved setting.
+ * A saved pause must also be respected during page initialization.
+ */
+export const TRACKING_ATTR = 'data-doomscroll-tracking';
+
+export function trackingPaused(doc: Document = document): boolean {
+  return (
+    !isTrackingSurface(doc.location?.pathname ?? '/') ||
+    doc.documentElement.getAttribute(TRACKING_ATTR) !== 'on'
+  );
+}
+
+/** Manifest exclusions only apply to a fresh load; SPA navigations need this too. */
+export function isTrackingSurface(pathname: string): boolean {
+  return !/^\/(?:direct|accounts)(?:\/|$)/.test(pathname);
 }
 
 // The author link sits a few levels above the video player; 12 is well clear
@@ -124,7 +161,14 @@ export function containerForPlayer(player: HTMLElement): HTMLElement | null {
   }
 
   for (const candidate of candidates) {
-    if (candidate.querySelector(AUTHOR_LINK_SELECTOR)) return candidate;
+    // The live layout can put an absolutely positioned player inside a
+    // zero-height wrapper. That wrapper has the right text but no geometry
+    // for midpoint tracking; use the first enclosing box with actual height.
+    if (
+      candidate.querySelector(AUTHOR_LINK_SELECTOR) &&
+      (candidate.clientHeight > 0 || candidate.getBoundingClientRect().height > 0)
+    )
+      return candidate;
   }
 
   // Author label renamed or dropped: fall back to the ancestor that is about

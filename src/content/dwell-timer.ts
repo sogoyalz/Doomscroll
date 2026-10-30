@@ -74,7 +74,8 @@ export function createDwellTracker<T>(
     const view = active;
     active = null;
 
-    const banked = view.accumulatedMs + (view.runStartedAt === null ? 0 : now - view.runStartedAt);
+    const banked =
+      view.accumulatedMs + (view.runStartedAt === null ? 0 : now - view.runStartedAt);
     const watchDurationMs = Math.min(Math.max(banked, 0), maxDwellMs);
     if (watchDurationMs < minDwellMs) return;
 

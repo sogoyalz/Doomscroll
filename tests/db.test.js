@@ -29,14 +29,14 @@ function makeEvent(overrides = {}) {
   const startedAt = overrides.startedAt ?? Date.now();
   return {
     id: `event-${nextId++}`,
-    reelShortcode: 'SYNTH-00001',
+    reelShortcode: 'Dbv6giIR-kt',
     sessionId: 'session-1',
     startedAt,
     endedAt: startedAt + 5000,
     watchDurationMs: 5000,
     captionText: 'a caption',
     hashtags: ['fyp'],
-    audioName: 'Sample Artist · Sample Track',
+    audioName: 'Nikk · Nakhre Tere',
     ...overrides,
   };
 }
@@ -73,6 +73,15 @@ beforeEach(async () => {
 });
 
 describe('recordReelView', () => {
+  it('deduplicates the same event inside concurrent write transactions', async () => {
+    const view = makeEvent();
+    await Promise.all([recordReelView(view), recordReelView(view), recordReelView(view)]);
+    expect(await getAllReelEvents()).toHaveLength(1);
+    expect(await getSession(view.sessionId)).toMatchObject({
+      reelCount: 1,
+      totalDurationMs: 5000,
+    });
+  });
   it('stores the event with classification fields left unset', () => {
     // Phase 5 fills these in; storage must not invent a category.
     return recordReelView(makeEvent()).then(async (stored) => {
@@ -102,7 +111,9 @@ describe('recordReelView', () => {
 
   it('folds later events into the same session', async () => {
     await recordReelView(makeEvent({ startedAt: 1000, endedAt: 6000, watchDurationMs: 5000 }));
-    await recordReelView(makeEvent({ startedAt: 7000, endedAt: 10_000, watchDurationMs: 3000 }));
+    await recordReelView(
+      makeEvent({ startedAt: 7000, endedAt: 10_000, watchDurationMs: 3000 }),
+    );
 
     const session = await getSession('session-1');
     expect(session.reelCount).toBe(2);
@@ -271,9 +282,9 @@ describe('clearAllData', () => {
 
 describe('authorHandle persistence', () => {
   it('round-trips the author through storage', async () => {
-    await recordReelView(makeEvent({ authorHandle: 'samplecreator' }));
+    await recordReelView(makeEvent({ authorHandle: 'sakshiandsid' }));
     const [stored] = await getAllReelEvents();
-    expect(stored.authorHandle).toBe('samplecreator');
+    expect(stored.authorHandle).toBe('sakshiandsid');
   });
 
   it('stores a reel whose author never resolved as null, not as missing', async () => {
@@ -311,7 +322,7 @@ describe('v2 -> v3 upgrade', () => {
         // A pre-v3 row: no authorHandle field at all.
         tx.objectStore('reelEvents').put({
           id: 'legacy-1',
-          reelShortcode: 'SYNTH-00001',
+          reelShortcode: 'Dbv6giIR-kt',
           sessionId: 'session-legacy',
           startedAt: 1_700_000_000_000,
           endedAt: 1_700_000_005_000,

@@ -46,7 +46,10 @@ export async function readStorageFailure(): Promise<StorageFailure | null> {
  */
 let failing: boolean | null = null;
 
-export async function noteStorageFailure(error: unknown, now: number = Date.now()): Promise<void> {
+export async function noteStorageFailure(
+  error: unknown,
+  now: number = Date.now(),
+): Promise<void> {
   failing = true;
   try {
     await chrome.storage.local.set({
@@ -74,10 +77,11 @@ export async function noteStorageWorking(): Promise<void> {
     if (!failing) return;
   }
 
-  failing = false;
   try {
     await chrome.storage.local.remove(KEY);
+    failing = false;
   } catch {
+    failing = true;
     // The banner lingers until the next successful write. Harmless.
   }
 }

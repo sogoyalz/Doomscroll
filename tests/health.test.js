@@ -154,7 +154,13 @@ describe('textlessShare', () => {
 
   it('is zero with no samples', () => {
     expect(
-      textlessShare({ samples: 0, missingAuthor: 0, missingText: 0, missingAudio: 0, lastUpdated: 0 }),
+      textlessShare({
+        samples: 0,
+        missingAuthor: 0,
+        missingText: 0,
+        missingAudio: 0,
+        lastUpdated: 0,
+      }),
     ).toBe(0);
   });
 });
@@ -351,7 +357,12 @@ describe('a sustained partial failure', () => {
 describe('audio channel counts', () => {
   it('forgets a channel that has stopped matching', async () => {
     for (let i = 0; i < 60; i++) {
-      await recordExtraction({ hasAuthor: true, hasText: true, hasAudio: true, audioChannel: 'href-reels-audio' });
+      await recordExtraction({
+        hasAuthor: true,
+        hasText: true,
+        hasAudio: true,
+        audioChannel: 'href-reels-audio',
+      });
     }
     expect(Object.keys((await readHealth()).audioChannels)).toContain('href-reels-audio');
 
@@ -365,7 +376,12 @@ describe('audio channel counts', () => {
 
   it('keeps a channel that is still matching', async () => {
     for (let i = 0; i < 200; i++) {
-      await recordExtraction({ hasAuthor: true, hasText: true, hasAudio: true, audioChannel: 'icon-fallback' });
+      await recordExtraction({
+        hasAuthor: true,
+        hasText: true,
+        hasAudio: true,
+        audioChannel: 'icon-fallback',
+      });
     }
     expect(Object.keys((await readHealth()).audioChannels)).toContain('icon-fallback');
   });

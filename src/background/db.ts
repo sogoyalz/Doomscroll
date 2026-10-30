@@ -22,8 +22,9 @@ const DB_NAME = 'doomscroll';
 // v2 adds detectionLog. v3 adds ReelEvent.authorHandle — an additive field
 // needing no data migration: events written before it carry undefined, which
 // reads as "not captured" and is normalised to null on the way out. v4 adds
-// interventionLog.
-const DB_VERSION = 4;
+// interventionLog. v5 indexes events by session and start time for bounded
+// detection windows and full-session streaks.
+const DB_VERSION = 5;
 
 /** How long raw per-reel history is kept. Daily aggregates outlive it. */
 export const RETENTION_DAYS = 90;
@@ -35,6 +36,7 @@ export interface DoomscrollDB extends DBSchema {
     indexes: {
       'by-startedAt': number;
       'by-session': string;
+      'by-session-time': [string, number];
     };
   };
   sessions: {
@@ -72,11 +74,15 @@ export function getDB(): Promise<IDBPDatabase<DoomscrollDB>> {
     dbPromise = openDB<DoomscrollDB>(DB_NAME, DB_VERSION, {
       // Guarded per store rather than switched on oldVersion, so upgrading
       // from any earlier version creates whatever is missing.
-      upgrade(db) {
+      upgrade(db, _oldVersion, _newVersion, tx) {
         if (!db.objectStoreNames.contains('reelEvents')) {
           const events = db.createObjectStore('reelEvents', { keyPath: 'id' });
           events.createIndex('by-startedAt', 'startedAt');
           events.createIndex('by-session', 'sessionId');
+        }
+        const events = tx.objectStore('reelEvents');
+        if (!events.indexNames.contains('by-session-time')) {
+          events.createIndex('by-session-time', ['sessionId', 'startedAt']);
         }
 
         if (!db.objectStoreNames.contains('sessions')) {
@@ -97,6 +103,15 @@ export function getDB(): Promise<IDBPDatabase<DoomscrollDB>> {
           const interventions = db.createObjectStore('interventionLog', { keyPath: 'id' });
           interventions.createIndex('by-at', 'at');
         }
+      },
+
+      // The connection can die under us — the user clearing site data is the
+      // ordinary way. Without this the cache keeps handing out a dead handle
+      // and every write throws against it; dropping it means the next call
+      // opens a fresh one. The `.catch` below only covers a failure to open,
+      // which is a different moment.
+      terminated() {
+        dbPromise = null;
       },
     }).catch((err: unknown) => {
       dbPromise = null;
@@ -134,8 +149,23 @@ export async function recordReelView(
   event: NewReelEvent,
   classification: ClassificationResult | null = null,
 ): Promise<ReelEvent> {
+  return (await recordReelViewOnce(event, classification)).event;
+}
+
+export async function recordReelViewOnce(
+  event: NewReelEvent,
+  classification: ClassificationResult | null = null,
+): Promise<{ event: ReelEvent; inserted: boolean }> {
   const db = await getDB();
   const tx = db.transaction(['reelEvents', 'sessions'], 'readwrite');
+
+  // A lost acknowledgement can cause a retry. Deduplicate within the same
+  // transaction as session totals, including concurrent deliveries.
+  const previous = await tx.objectStore('reelEvents').get(event.id);
+  if (previous) {
+    await tx.done;
+    return { event: previous, inserted: false };
+  }
 
   const reelEvent: ReelEvent = {
     ...event,
@@ -170,7 +200,7 @@ export async function recordReelView(
     tx.done,
   ]);
 
-  return reelEvent;
+  return { event: reelEvent, inserted: true };
 }
 
 /** Reel events with `startedAt` in [from, to], oldest first. */
@@ -198,11 +228,50 @@ export async function getRecentReelEvents(limit: number): Promise<ReelEvent[]> {
   return events;
 }
 
+/** Newest first, scoped to one session and bounded without loading its history. */
+export async function getRecentSessionEvents(
+  sessionId: string,
+  limit: number,
+): Promise<ReelEvent[]> {
+  const db = await getDB();
+  const tx = db.transaction('reelEvents', 'readonly');
+  const index = tx.store.index('by-session-time');
+  const range = IDBKeyRange.bound([sessionId, 0], [sessionId, Number.MAX_SAFE_INTEGER]);
+  const events: ReelEvent[] = [];
+  for (
+    let cursor = await index.openCursor(range, 'prev');
+    cursor && events.length < limit;
+    cursor = await cursor.continue()
+  ) {
+    events.push(cursor.value);
+  }
+  await tx.done;
+  return events;
+}
+
+/** Streak length is independent of the shorter dominance window. */
+export async function getSessionStreak(sessionId: string, category: string): Promise<number> {
+  const db = await getDB();
+  const tx = db.transaction('reelEvents', 'readonly');
+  const index = tx.store.index('by-session-time');
+  const range = IDBKeyRange.bound([sessionId, 0], [sessionId, Number.MAX_SAFE_INTEGER]);
+  let streak = 0;
+  for (
+    let cursor = await index.openCursor(range, 'prev');
+    cursor;
+    cursor = await cursor.continue()
+  ) {
+    if (cursor.value.category === category) streak++;
+    else if (cursor.value.category !== null) break;
+  }
+  await tx.done;
+  return streak;
+}
+
 export async function getAllReelEvents(): Promise<ReelEvent[]> {
   const db = await getDB();
   return db.getAllFromIndex('reelEvents', 'by-startedAt');
 }
-
 
 /** Rows per transaction for bulk writes. Large enough to amortise the
  *  transaction cost, small enough to stay responsive. */

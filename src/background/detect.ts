@@ -8,16 +8,24 @@
 // have been checked against a real week of one person's scrolling, and the
 // detection log is the artifact that makes that check possible.
 
-import { getDailyAggregates, getDetectionLog, getRecentReelEvents, putDetectionLog } from './db.js';
+import {
+  getDailyAggregates,
+  getDetectionLog,
+  getRecentSessionEvents,
+  getSessionStreak,
+  putDetectionLog,
+} from './db.js';
 import {
   BASELINE_WINDOW_DAYS,
   chargedBaselineShares,
-  currentStreak,
   detectPattern,
   type PatternDetection,
 } from '@shared/patterns.js';
 import { localDateKey, startOfLocalDayBefore } from '@shared/time.js';
 import type { DetectionLogEntry, ReelEvent, UserSettings } from '@shared/types.js';
+import { decideIntervention } from '@shared/intervene.js';
+import { isBreakActive } from '@shared/break.js';
+import { readState, readBreak } from './intervene.js';
 
 /**
  * True when a new check says the same thing as the last one.
@@ -97,7 +105,7 @@ export async function runDetection(
   settings: UserSettings,
   now: number = Date.now(),
 ): Promise<PatternDetection> {
-  const recent = await getRecentReelEvents(settings.patternWindowSize);
+  const recent = await getRecentSessionEvents(sessionId, settings.patternWindowSize);
 
   // Baseline excludes today: the session being judged must not be allowed to
   // raise the bar it is judged against. Yesterday backwards.
@@ -123,6 +131,21 @@ export async function runDetection(
     },
     now,
   );
+  detection.streak = detection.category
+    ? await getSessionStreak(sessionId, detection.category)
+    : 0;
+
+  const wouldAct =
+    settings.interventionEnabled &&
+    decideIntervention({
+      detected: detection.detected,
+      streak: detection.streak,
+      settings,
+      state: await readState(),
+      sessionId,
+      now,
+      onBreak: isBreakActive(await readBreak(), now),
+    }).act;
 
   const measurements = {
     detected: detection.detected,
@@ -136,14 +159,14 @@ export async function runDetection(
     baselineSample: detection.baselineSample,
     // detectPattern already computes this for the category it reports; falling
     // back keeps the field populated on the early returns that name none.
-    streak: detection.streak || (detection.category ? currentStreak(recent, detection.category) : 0),
+    streak: detection.streak,
     reason: detection.reason,
     baselineShareLong: detection.category
       ? (chargedBaselineShares(longDays, now).shares[detection.category] ?? 0)
       : 0,
     pacePerSec: pacePerSec(recent),
     hourOfDay: new Date(now).getHours(),
-    wouldHaveActed: detection.detected && settings.interventionEnabled,
+    wouldHaveActed: wouldAct,
   };
 
   const [previous] = await getDetectionLog(1);

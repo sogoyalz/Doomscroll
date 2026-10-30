@@ -11,6 +11,7 @@
 
 import { DEFAULT_SETTINGS, MINUTE_MS, SETTING_BOUNDS } from './defaults.js';
 import { CHARGED_CATEGORIES } from './taxonomy.js';
+import { createSerialQueue } from './serial.js';
 import type { UserSettings } from './types.js';
 
 /** Exported so listeners can tell a settings change from any other write. */
@@ -33,10 +34,14 @@ export async function getSettings(): Promise<UserSettings> {
   return mergeSettings(DEFAULT_SETTINGS, stored);
 }
 
-export async function updateSettings(patch: Partial<UserSettings>): Promise<UserSettings> {
-  const next = mergeSettings(await getSettings(), patch);
-  await chrome.storage.local.set({ [SETTINGS_KEY]: next });
-  return next;
+const serializeUpdate = createSerialQueue();
+
+export function updateSettings(patch: Partial<UserSettings>): Promise<UserSettings> {
+  return serializeUpdate(async () => {
+    const next = mergeSettings(await getSettings(), patch);
+    await chrome.storage.local.set({ [SETTINGS_KEY]: next });
+    return next;
+  });
 }
 
 /** A number inside its bounds, or the fallback when it is not a number at all. */
@@ -49,8 +54,50 @@ function bool(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
+/**
+ * The intervention ladder, bounded and back in order.
+ *
+ * Bounded for the same reason every other number here is: this is the only
+ * function a write can arrive through, and these four were passing through it
+ * untouched. A threshold of 0 is the sharp edge — `levelForStreak` returns
+ * that rung for a run of length zero, so every detection fired the harshest
+ * interruption available.
+ *
+ * Sorted because an out-of-order ladder is not a stricter setting, it is an
+ * unreachable rung. `levelForStreak` tests block first, then overlay, then
+ * notify, so with notify above block any run long enough to notify has
+ * already returned block and notify can never fire at all. Sorting keeps the
+ * numbers the user asked for and only fixes which rung each belongs to.
+ */
+function mergeLevels(
+  base: UserSettings['interventionLevels'],
+  patch: Partial<UserSettings['interventionLevels']> | undefined,
+): UserSettings['interventionLevels'] {
+  const merged = { ...base, ...(patch ?? {}) };
+  const fallback = DEFAULT_SETTINGS.interventionLevels;
+
+  const [notifyAfterStreak, overlayAfterStreak, blockAfterStreak] = (
+    [
+      ['notifyAfterStreak', SETTING_BOUNDS.notifyAfterStreak] as const,
+      ['overlayAfterStreak', SETTING_BOUNDS.overlayAfterStreak] as const,
+      ['blockAfterStreak', SETTING_BOUNDS.blockAfterStreak] as const,
+    ] satisfies readonly (readonly [keyof typeof fallback, { min: number; max: number }])[]
+  )
+    .map(([key, bounds]) => Math.round(clamp(merged[key], bounds, fallback[key])))
+    .sort((a, b) => a - b) as [number, number, number];
+
+  return {
+    notifyAfterStreak,
+    overlayAfterStreak,
+    blockAfterStreak,
+    blockCooldownMs: Math.round(
+      clamp(merged.blockCooldownMs, SETTING_BOUNDS.blockCooldownMs, fallback.blockCooldownMs),
+    ),
+  };
+}
+
 const WATCHABLE = new Set<string>(CHARGED_CATEGORIES);
-const MODES: UserSettings['classificationMode'][] = ['local-rules', 'local-ml', 'cloud-llm'];
+const MODES: UserSettings['classificationMode'][] = ['local-rules', 'local-ml'];
 
 /**
  * Shallow merge, except for `interventionLevels` — a plain spread would let a
@@ -71,10 +118,9 @@ function mergeSettings(base: UserSettings, patch: unknown): UserSettings {
   const merged = {
     ...base,
     ...incoming,
-    interventionLevels: {
-      ...base.interventionLevels,
-      ...(incoming.interventionLevels ?? {}),
-    },
+    // Spread rather than replaced, so a patch touching one threshold does not
+    // silently drop the other three. Validated by mergeLevels below.
+    interventionLevels: mergeLevels(base.interventionLevels, incoming.interventionLevels),
   };
 
   return {

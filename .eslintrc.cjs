@@ -41,5 +41,13 @@ module.exports = {
       env: { node: true },
     },
   ],
-  ignorePatterns: ['dist/', 'node_modules/', '**/*.bundle.js', '**/*.bundle.js.map'],
+  ignorePatterns: [
+    'dist/',
+    'node_modules/',
+    '.workspace-backup/',
+    '.dev/',
+    '.code-review-graph/',
+    '**/*.bundle.js',
+    '**/*.bundle.js.map',
+  ],
 };

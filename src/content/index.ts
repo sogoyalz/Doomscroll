@@ -13,9 +13,11 @@ import {
   bridgeStatus,
   findReelContainers,
   findScrollContainer,
+  TRACKING_ATTR,
+  isTrackingSurface,
 } from './dom.js';
-import { createDwellTracker, type CompletedView } from './detector.js';
-import { isHudMounted, mountHud, pushHudRow, unmountHud } from './hud.js';
+import { createDwellTracker, type CompletedView } from './dwell-timer.js';
+import { confirmHudDelivery, mountHud, pushHudRow, unmountHud } from './hud.js';
 import { hideOverlay, isOverlayShowing, showBreakReminder, showOverlay } from './overlay.js';
 import { goTo } from './navigate.js';
 import {
@@ -35,8 +37,11 @@ import {
   type ExtractedReel,
 } from './extractor.js';
 import { currentSessionId } from './session.js';
+import { keepPendingView } from '@shared/pending-views.js';
+import { noteStorageFailure } from '@shared/storage-health.js';
 import { recordExtraction } from '@shared/health.js';
 import { getSettings, SETTINGS_KEY } from '@shared/settings.js';
+import { send } from '@shared/client.js';
 import type { ExtensionMessage } from '@shared/messages.js';
 import type { NewReelEvent } from '@shared/types.js';
 
@@ -71,6 +76,7 @@ let lastScrollScanAt = 0;
 let syncScheduled = false;
 let observing = false;
 let unloaded = false;
+let trackingEnabled = false;
 
 /**
  * Coalesces sync requests into one per frame.
@@ -89,6 +95,10 @@ function scheduleSync(): void {
 }
 
 function syncActiveReel(now: number = Date.now()): void {
+  if (!isTrackingSurface(location.pathname)) {
+    stopObserving();
+    return;
+  }
   const containers = findReelContainers();
 
   if (intersectionObserver) {
@@ -210,7 +220,7 @@ async function reportView(
   const event: NewReelEvent = {
     id: crypto.randomUUID(),
     reelShortcode: reel.identity,
-    sessionId: await currentSessionId(view.endedAt),
+    sessionId: await currentSessionId(view.endedAt, view.startedAt),
     startedAt: view.startedAt,
     endedAt: view.endedAt,
     watchDurationMs: view.watchDurationMs,
@@ -233,22 +243,29 @@ async function reportView(
     now: view.endedAt,
   });
 
-  reportToHud(reel, event);
-
-  const message: ExtensionMessage = { type: 'REEL_VIEW_LOGGED', payload: event };
+  pushHudRow(reel, event.watchDurationMs);
+  try {
+    // Keep a durable copy before delivery. A lost message or acknowledgement
+    // is recovered by the worker's alarm; the event id makes retries safe.
+    await keepPendingView(event);
+  } catch (err) {
+    await noteStorageFailure(err);
+  }
   try {
     // sendMessage returns a promise here; without the catch, a rejection
     // (service worker asleep, context invalidated during reload) surfaces as
     // an unhandled rejection in the page console.
-    await chrome.runtime.sendMessage(message);
+    const result = await send('REEL_VIEW_LOGGED', event);
+    confirmHudDelivery(result.queued);
   } catch {
-    // Dropping a single view is preferable to breaking the page.
+    // The worker retries the durable copy after reconnecting.
   }
 }
 
 function startObserving(): void {
-  if (observing || unloaded) return;
+  if (observing || unloaded || !isTrackingSurface(location.pathname)) return;
   observing = true;
+  syncDwellClock();
 
   intersectionObserver = new IntersectionObserver(() => scheduleSync(), {
     rootMargin: MIDPOINT_ROOT_MARGIN,
@@ -273,6 +290,8 @@ function stopObserving(): void {
   // An interruption outliving the tracking it was about would be a dialog the
   // user cannot explain and the extension is no longer entitled to show.
   hideOverlay();
+  const previous = tracker.currentTarget();
+  if (previous) snapshots.delete(previous);
   tracker.discard();
   intersectionObserver?.disconnect();
   intersectionObserver = null;
@@ -287,8 +306,17 @@ function stopObserving(): void {
 }
 
 async function applyTrackingSetting(): Promise<void> {
-  const { trackingEnabled, debugHud } = await getSettings();
+  const settings = await getSettings();
+  trackingEnabled = settings.trackingEnabled;
+  const { debugHud } = settings;
   console.log(`[Doomscroll] tracking ${trackingEnabled ? 'enabled' : 'PAUSED'}`);
+
+  // Published for the MAIN-world bridge, which has no chrome.* at all and so
+  // cannot read this setting itself. Without it that script kept walking React
+  // fiber and writing attributes into the page after the user switched
+  // tracking off — the half of "stops watching the page" that was not true.
+  document.documentElement.setAttribute(TRACKING_ATTR, trackingEnabled ? 'on' : 'off');
+
   if (trackingEnabled) startObserving();
   else stopObserving();
 
@@ -296,27 +324,6 @@ async function applyTrackingSetting(): Promise<void> {
   // switch — a panel showing a frozen count while paused reads as a bug.
   if (debugHud && trackingEnabled) mountHud();
   else unmountHud();
-}
-
-/**
- * Feeds the diagnostic panel, when one is mounted.
- *
- * Guarded rather than unconditional so the HUD costs nothing in the normal
- * case: this runs once per finished reel on the page the user is scrolling.
- *
- * The per-reel console line lives behind the same guard. It used to run
- * unconditionally, which put the caption of everything you watch into the
- * console of a page you do not control, on a machine whose whole selling point
- * is that this data never leaves it — a debugging convenience that had outlived
- * the debug switch built for exactly this.
- */
-function reportToHud(reel: ExtractedReel, event: NewReelEvent): void {
-  if (!isHudMounted()) return;
-  pushHudRow(reel, event.watchDurationMs);
-  console.log(
-    `[Doomscroll] reel watched ${event.watchDurationMs}ms — "${event.reelShortcode}"`,
-    reel.captionText ? `caption: ${reel.captionText.slice(0, 60)}` : '(no caption)',
-  );
 }
 
 /**
@@ -412,7 +419,9 @@ function start(): void {
   console.log('[Doomscroll] content script loaded on', location.pathname);
 
   let loggedFirstScan = false;
-  const heartbeat = setInterval(() => {
+  const onHeartbeat = () => {
+    if (trackingEnabled && isTrackingSurface(location.pathname)) startObserving();
+    else stopObserving();
     if (!observing) return;
     const now = Date.now();
     ensureObservationTargets(now);
@@ -431,7 +440,8 @@ function start(): void {
     // Cheap, and the only thing that notices an overlay being dismissed by a
     // path that does not route through here.
     syncDwellClock(now);
-  }, HEARTBEAT_MS);
+  };
+  let heartbeat = setInterval(onHeartbeat, HEARTBEAT_MS);
 
   document.addEventListener('visibilitychange', () => syncDwellClock());
 
@@ -535,6 +545,13 @@ function start(): void {
     tracker.flush(Date.now());
     stopObserving();
     clearInterval(heartbeat);
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    unloaded = false;
+    heartbeat = setInterval(onHeartbeat, HEARTBEAT_MS);
+    void refreshBreak();
+    void applyTrackingSetting();
   });
 
   void applyTrackingSetting();

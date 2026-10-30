@@ -46,7 +46,20 @@ function labelFor(key: string): string {
   return key;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
 /**
  * Day of the month alone.
@@ -118,7 +131,9 @@ export function DayStacks({ days }: Props) {
                 />
               ))}
             </div>
-            <span className="stack-date">{labelled.has(day.date) ? dayNumber(day.date) : ''}</span>
+            <span className="stack-date">
+              {labelled.has(day.date) ? dayNumber(day.date) : ''}
+            </span>
           </div>
         ))}
       </div>
