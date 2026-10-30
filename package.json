@@ -13,7 +13,8 @@
     "format": "prettier --write .",
     "test:browser": "playwright test",
     "security:check": "node scripts/check-sensitive.mjs HEAD",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run package && npm run test:browser"
+    "verify": "npm run typecheck && npm run lint && npm test && npm run package && npm run test:browser",
+    "assets:store": "node scripts/store-assets.mjs"
   },
   "dependencies": {
     "idb": "^8.0.0",

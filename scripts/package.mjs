@@ -32,6 +32,10 @@ const manifest = JSON.parse(readFileSync(join(dist, 'manifest.json'), 'utf8'));
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
 const problems = [];
+const minimumChrome = Number(manifest.minimum_chrome_version?.split('.')[0]);
+if (!Number.isInteger(minimumChrome) || minimumChrome < 116) {
+  problems.push('minimum Chrome version must cover Promise-based notification delivery (116+)');
+}
 
 // An archive must contain only known build outputs. In particular, reject
 // source maps, exports, credentials, browser profiles, and arbitrary public/

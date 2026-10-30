@@ -2,6 +2,12 @@ import { test, expect, chromium } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+
+const { version } = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+);
 
 let context, worker, options, extensionId, profile;
 const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>
@@ -63,7 +69,13 @@ async function advance(page, index) {
 
 test.beforeEach(async () => {
   profile = await mkdtemp(join(tmpdir(), 'doomscroll-browser-'));
-  const extension = resolve('dist');
+  const extracted = join(profile, 'packaged-extension');
+  // Test exactly what users receive, rather than only the build directory.
+  execFileSync('unzip', ['-q', resolve(`doomscroll-${version}.zip`), '-d', extracted]);
+  const manifest = JSON.parse(readFileSync(join(extracted, 'manifest.json'), 'utf8'));
+  expect(manifest.version).toBe(version);
+  expect(Number(manifest.minimum_chrome_version)).toBeGreaterThanOrEqual(116);
+  const extension = extracted;
   context = await chromium.launchPersistentContext(profile, {
     channel: 'chromium',
     headless: true,
@@ -201,4 +213,41 @@ test('tracking restarts after a persisted page restoration', async () => {
   await page.waitForTimeout(400);
   await advance(page, 1);
   await expect.poll(async () => (await events()).length).toBe(2);
+});
+
+test('accepting a break leaves the feed and reminds on return', async () => {
+  const page = await feed();
+  await options.evaluate(async () => {
+    const [tab] = await chrome.tabs.query({ url: 'https://www.instagram.com/reels/*' });
+    const reply = await chrome.tabs.sendMessage(tab.id, {
+      type: 'INTERVENE',
+      payload: {
+        id: 'synthetic-break',
+        level: 'overlay',
+        category: 'sad',
+        streak: 10,
+      },
+    });
+    if (!reply?.data?.shown) throw new Error('Overlay was not delivered');
+  });
+  await page.getByRole('button', { name: 'Take a break', exact: true }).click();
+  await expect(page).toHaveURL('https://www.instagram.com/');
+  await page.goto('https://www.instagram.com/reels/synthetic/');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button', { name: /End it/ }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('exports recorded views and deletion removes the persisted data', async () => {
+  const page = await feed();
+  await page.waitForTimeout(400);
+  await advance(page, 1);
+  await expect.poll(async () => (await events()).length).toBe(1);
+  const exported = await send('EXPORT_DATA', { which: 'reels' });
+  expect(exported.filename).toBe('doomscroll-reels.csv');
+  expect(exported.csv).toContain('SYNTHETIC00');
+  await send('CLEAR_DATA');
+  expect(await events()).toHaveLength(0);
+  await options.reload();
+  expect((await send('EXPORT_DATA', { which: 'reels' })).csv).not.toContain('SYNTHETIC00');
 });

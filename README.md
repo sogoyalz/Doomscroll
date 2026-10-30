@@ -11,7 +11,7 @@ acceptance testing and a multi-user beta remain release gates. See
 
 ## Run it
 
-Requires Chrome 111+ and Node 22.12+ or Node 24+ for development.
+Requires Chrome 116+ and Node 22.12+ or Node 24+ for development.
 
 ```sh
 npm ci

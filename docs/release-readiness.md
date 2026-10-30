@@ -20,8 +20,10 @@ Install the test browser first with `npx playwright install chromium`.
   24 hours and are removed on pause or history deletion.
 - A pause or deletion establishes a cutoff so delayed earlier views cannot
   reappear after tracking resumes.
-- The packaged extension loads in Chromium; real content scripts extract and
+- The actual ZIP is extracted into a clean profile and loads in Chromium; real content scripts extract and
   store synthetic reels; the block delay expires and permits dismissal.
+- Accepting a break navigates away and returning shows the reminder. Export
+  contains the recorded views and deletion removes persisted events.
 - Privacy exclusions apply to SPA navigations into Direct and Accounts.
 - Full-history private-file guard, Gitleaks, dependency audit, and packaging.
 
@@ -70,7 +72,7 @@ recall. Do not use classifier-generated labels as ground truth.
 
 - Complete the live and beta gates; attach a dated, sanitized result summary.
 - Review privacy policy and store listing against the final build.
-- Prepare store screenshots without exposing viewing history or account details.
+- Store screenshots: complete, using disclosed synthetic data in `store-assets/`.
 - Build the final zip from a clean GitHub-based checkout after CI passes.
 - Record commit SHA, version, archive SHA-256, supported environment, and rollback
   plan. A rollback containing code changes still needs a higher store version;
