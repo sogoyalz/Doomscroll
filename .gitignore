@@ -6,3 +6,20 @@ doomscroll-*.zip
 
 # Never commit exported reel data — it is personal viewing history
 *.csv
+*.tsv
+*.ndjson
+*.har
+*.sqlite
+*.sqlite3
+*.db
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+.aws/
+.ssh/
+credentials*
+cookies*
+instagram-*/
