@@ -12,7 +12,13 @@ import {
   readdirSync,
   lstatSync,
   writeFileSync,
+  mkdtempSync,
+  mkdirSync,
+  copyFileSync,
+  chmodSync,
+  utimesSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 
@@ -103,11 +109,40 @@ const zipName = `doomscroll-${pkg.version}.zip`;
 const zipPath = join(root, zipName);
 rmSync(zipPath, { force: true });
 
+// Stable order, timestamps, permissions and stripped host metadata make the
+// archive reproducible without changing the working build's file metadata.
+const staging = mkdtempSync(join(tmpdir(), 'doomscroll-package-'));
+const archiveFiles = [];
+function stage(directory, prefix = '') {
+  for (const name of readdirSync(directory).sort()) {
+    const relative = prefix + name;
+    const source = join(directory, name);
+    const target = join(staging, relative);
+    if (lstatSync(source).isDirectory()) {
+      mkdirSync(target, { recursive: true });
+      stage(source, relative + '/');
+    } else {
+      copyFileSync(source, target);
+      chmodSync(target, 0o644);
+      const timestamp = new Date('2000-01-01T00:00:00Z');
+      utimesSync(target, timestamp, timestamp);
+      archiveFiles.push(relative);
+    }
+  }
+}
 try {
-  execFileSync('zip', ['-qr', zipPath, '.'], { cwd: dist, stdio: 'inherit' });
+  stage(dist);
+  execFileSync('zip', ['-Xq', zipPath, ...archiveFiles], {
+    cwd: staging,
+    env: { ...process.env, TZ: 'UTC' },
+    stdio: 'inherit',
+  });
 } catch (err) {
+  rmSync(zipPath, { force: true });
   if (err.code === 'ENOENT') fail('`zip` is not installed or not on PATH.');
   throw err;
+} finally {
+  rmSync(staging, { recursive: true, force: true });
 }
 
 console.log(`\n  ✓ ${zipName}`);

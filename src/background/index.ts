@@ -354,8 +354,14 @@ async function ensureMaintenanceAlarms(): Promise<void> {
     if (!(await chrome.alarms.get(name))) await chrome.alarms.create(name, { periodInMinutes });
   }
 }
-void ensureMaintenanceAlarms().catch((err: unknown) => {
-  console.error('Doomscroll: maintenance alarms could not be restored', err);
+// A worker can start after an extension reload or process eviction without
+// runtime.onStartup firing. Recover durable deliveries on every worker start;
+// transactional event IDs make overlapping startup/alarm retries safe.
+void (async () => {
+  await ensureMaintenanceAlarms();
+  await serializeHistory(retryPendingViews);
+})().catch((err: unknown) => {
+  console.error('Doomscroll: worker recovery failed', err);
 });
 
 chrome.runtime.onInstalled.addListener((details) => {

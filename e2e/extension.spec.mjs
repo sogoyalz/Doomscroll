@@ -70,15 +70,8 @@ async function advance(page, index) {
   }, index);
 }
 
-test.beforeEach(async () => {
-  profile = await mkdtemp(join(tmpdir(), 'doomscroll-browser-'));
-  const extracted = join(profile, 'packaged-extension');
-  // Test exactly what users receive, rather than only the build directory.
-  execFileSync('unzip', ['-q', resolve(`doomscroll-${version}.zip`), '-d', extracted]);
-  const manifest = JSON.parse(readFileSync(join(extracted, 'manifest.json'), 'utf8'));
-  expect(manifest.version).toBe(version);
-  expect(Number(manifest.minimum_chrome_version)).toBeGreaterThanOrEqual(116);
-  const extension = extracted;
+async function launchProfile() {
+  const extension = join(profile, 'packaged-extension');
   context = await chromium.launchPersistentContext(profile, {
     channel: 'chromium',
     headless: true,
@@ -97,6 +90,17 @@ test.beforeEach(async () => {
   options = await context.newPage();
   await options.goto(`chrome-extension://${extensionId}/src/options/index.html`);
   await expect(options.getByLabel('Record the reels I watch')).toBeChecked();
+}
+
+test.beforeEach(async () => {
+  profile = await mkdtemp(join(tmpdir(), 'doomscroll-browser-'));
+  const extracted = join(profile, 'packaged-extension');
+  // Test exactly what users receive, rather than only the build directory.
+  execFileSync('unzip', ['-q', resolve(`doomscroll-${version}.zip`), '-d', extracted]);
+  const manifest = JSON.parse(readFileSync(join(extracted, 'manifest.json'), 'utf8'));
+  expect(manifest.version).toBe(version);
+  expect(Number(manifest.minimum_chrome_version)).toBeGreaterThanOrEqual(116);
+  await launchProfile();
 });
 test.afterEach(async () => {
   await context?.close();
@@ -260,4 +264,63 @@ test('exports recorded views and deletion removes the persisted data', async () 
   expect(await events()).toHaveLength(0);
   await options.reload();
   expect((await send('EXPORT_DATA', { which: 'reels' })).csv).not.toContain('SYNTHETIC00');
+});
+
+test('browser restart recovers pending views exactly once and restores missing alarms', async () => {
+  const page = await feed();
+  await page.waitForTimeout(400);
+  await advance(page, 1);
+  await expect.poll(async () => (await events()).length).toBe(1);
+  await page.close();
+  const original = (await events())[0];
+  await options.evaluate(async (event) => {
+    const recovered = { ...event, id: 'synthetic-restart-recovery' };
+    await chrome.storage.local.set({
+      ['doomscroll:pendingView:' + event.id]: { event, queuedAt: Date.now() },
+      ['doomscroll:pendingView:' + recovered.id]: { event: recovered, queuedAt: Date.now() },
+    });
+    await chrome.alarms.clearAll();
+  }, original);
+  await context.close();
+  await launchProfile();
+  await expect.poll(async () => (await events()).length).toBe(2);
+  expect((await events()).filter((event) => event.id === original.id)).toHaveLength(1);
+  expect(
+    (await events()).filter((event) => event.id === 'synthetic-restart-recovery'),
+  ).toHaveLength(1);
+  await expect
+    .poll(() =>
+      options.evaluate(
+        async () =>
+          Object.keys(await chrome.storage.local.get(null)).filter((key) =>
+            key.startsWith('doomscroll:pendingView:'),
+          ).length,
+      ),
+    )
+    .toBe(0);
+  expect(
+    await options.evaluate(async () =>
+      (await chrome.alarms.getAll()).map((alarm) => alarm.name),
+    ),
+  ).toEqual(expect.arrayContaining(['doomscroll:delivery', 'doomscroll:prune']));
+  await send('CLEAR_DATA');
+  // Simulate an old content script writing its durable copy after deletion.
+  await options.evaluate(async (event) => {
+    await chrome.storage.local.set({
+      ['doomscroll:pendingView:' + event.id]: { event, queuedAt: Date.now() },
+    });
+  }, original);
+  await context.close();
+  await launchProfile();
+  await expect
+    .poll(() =>
+      options.evaluate(
+        async () =>
+          Object.keys(await chrome.storage.local.get(null)).filter((key) =>
+            key.startsWith('doomscroll:pendingView:'),
+          ).length,
+      ),
+    )
+    .toBe(0);
+  expect(await events()).toHaveLength(0);
 });

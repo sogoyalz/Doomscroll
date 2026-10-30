@@ -18,6 +18,8 @@ Install the test browser first with `npx playwright install chromium`.
 - Pending views survive a delivery failure and are replayed without sending
   interruptions to a tab that may have changed. Pending copies expire after
   24 hours and are removed on pause or history deletion.
+- A full browser shutdown/relaunch recovers queued views exactly once, restores
+  missing maintenance alarms, and rejects pre-deletion views after another restart.
 - A pause or deletion establishes a cutoff so delayed earlier views cannot
   reappear after tracking resumes.
 - The actual ZIP is extracted into a clean profile and loads in Chromium; real content scripts extract and
@@ -26,6 +28,8 @@ Install the test browser first with `npx playwright install chromium`.
   contains the recorded views and deletion removes persisted events.
 - Privacy exclusions apply to SPA navigations into Direct and Accounts.
 - Full-history private-file guard, Gitleaks, dependency audit, and packaging.
+- CI independently builds the release twice and compares archive bytes. ZIP
+  ordering, timestamps, permissions, and host metadata are normalized.
 
 Browser integration tests use an isolated profile and synthetic HTML served at
 a mocked Instagram URL. They never log into Instagram or use personal data.

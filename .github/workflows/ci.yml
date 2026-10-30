@@ -28,7 +28,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       # Also exercises the packaging checks: icons present, both content
       # scripts emitted, the MAIN-world script still registered.
-      - run: npm run package
+      - run: npm run package:verify
       - run: npm run test:browser
 
   audit:
