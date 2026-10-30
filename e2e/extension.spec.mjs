@@ -23,8 +23,9 @@ html,body{margin:0}#feed{height:100vh;overflow-y:auto}section{height:100vh;posit
 ).join('')}
 </div><script>document.querySelectorAll('[data-reel]').forEach((el,i)=>{
 el.__reactFiber$fixture={memoizedProps:{},return:null};
-el.querySelector('video').__reactFiber$fixture={memoizedProps:{},return:{
-memoizedProps:{media:{code:'SYNTHETIC0'+i}},return:el.__reactFiber$fixture}};
+let stack={memoizedProps:{media:{code:'SYNTHETIC0'+i}},return:el.__reactFiber$fixture};
+for(let depth=0;depth<60;depth++) stack={memoizedProps:{},return:stack};
+el.querySelector('video').__reactFiber$fixture=stack;
 });</script></body></html>`;
 
 async function send(type, payload = {}) {

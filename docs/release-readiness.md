@@ -32,7 +32,9 @@ a mocked Instagram URL. They never log into Instagram or use personal data.
 No source-map, browser profile, test result, or private export belongs in a
 release archive.
 
-## Live acceptance gate — pending
+## Live acceptance gate — partially verified
+
+The installed candidate now passes a [ten-view live capture smoke sample](live-capture-2026-10-30.md), with ten fiber-derived IDs and an exact capture-counter increase. Live persisted-count reconciliation and the remaining matrix below are still pending.
 
 A limited [live layout smoke check](live-check-2026-10-30.md) found and verified
 fixes for zero-height wrappers and duplicate audio links. It does not replace

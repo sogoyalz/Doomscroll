@@ -62,6 +62,15 @@ beforeEach(() => {
 const status = () => document.documentElement.getAttribute(BRIDGE_STATUS_ATTR);
 
 describe('shortcodeFromFiber', () => {
+  it('reaches media above a deep video-player component stack', () => {
+    const el = container({});
+    let node = { memoizedProps: { media: { code: 'DEEPREEL123' } }, return: null };
+    for (let i = 0; i < 60; i++) node = { memoizedProps: {}, return: node };
+    const video = document.createElement('video');
+    video[FIBER_KEY] = node;
+    el.querySelector('[aria-label="Video player"]').append(video);
+    expect(mw.shortcodeFromFiber(el)).toBe('DEEPREEL123');
+  });
   it('finds media props below the measurable geometry wrapper', () => {
     const el = container({});
     const player = el.querySelector('[aria-label="Video player"]');

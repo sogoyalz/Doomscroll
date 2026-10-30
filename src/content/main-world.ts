@@ -24,9 +24,9 @@ import {
   VIDEO_PLAYER_SELECTOR,
 } from './dom.js';
 
-// memoizedProps.media.code was found within ~5 levels; 30 is generous
-// headroom without risking a walk to the fiber root on every container.
-const FIBER_WALK_LIMIT = 30;
+// The live October 2026 player stack exceeded the former 30-level limit.
+// Keep the walk bounded and avoid revisiting shared ancestors or cycles.
+const FIBER_WALK_LIMIT = 120;
 
 // Re-tag periodically: React recycles containers as the feed virtualizes, and
 // a re-render can drop an attribute React does not manage.
@@ -69,6 +69,7 @@ function readFiber(el: HTMLElement): { code: string | null; hasFiber: boolean } 
   // Starting only from that wrapper skips the component entirely. Prefer
   // the media leaf and player, retaining the wrapper as a fallback.
   let hasFiber = false;
+  const visited = new Set<FiberNode>();
   for (const candidate of [
     el.querySelector('video'),
     el.querySelector(VIDEO_PLAYER_SELECTOR),
@@ -77,7 +78,8 @@ function readFiber(el: HTMLElement): { code: string | null; hasFiber: boolean } 
     if (!(candidate instanceof HTMLElement)) continue;
     let node: FiberNode | null = fiberOf(candidate);
     if (node) hasFiber = true;
-    for (let depth = 0; depth < FIBER_WALK_LIMIT && node; depth++) {
+    for (let depth = 0; depth < FIBER_WALK_LIMIT && node && !visited.has(node); depth++) {
+      visited.add(node);
       const code = node.memoizedProps?.media?.code;
       if (typeof code === 'string' && code) return { code, hasFiber: true };
       node = node.return;
