@@ -51,3 +51,23 @@ with synthetic data. They are not represented here as completed live tests.
 This session does not complete the full live acceptance matrix, multi-user beta,
 minimum-version runtime test, or an effectiveness study. See
 `release-readiness.md` and `beta-acceptance.md` for the remaining gates.
+
+## Follow-up: live save acknowledgements
+
+After installing commit `c33776a`, a fresh consenting user's Chrome Reels tab
+showed the new separate capture and save counters. A rapid preliminary sample
+was excluded because it did not enforce minimum dwell. Its settled baseline
+was one captured view and one confirmed save.
+
+Ten subsequent controlled next-reel transitions used 800ms dwell before each
+transition and 800ms to settle replies afterwards. Each transition incremented
+both counters by exactly one, ending at 11 captures and 11 confirmed saves.
+All ten observations had zero skipped and zero unconfirmed views, `bridge: ok`,
+and no fallback identities in the rolling diagnostic rows. The validation tab
+was closed afterwards to prevent additional test views.
+
+The save count advances only after a successful worker response following the
+IndexedDB transaction and persistence bookkeeping. This verifies live save
+acknowledgement for the sample. It is still not an independent read of the
+popup's stored total or a test of worker restart recovery on the live feed.
+No private feed content, identifiers, screenshots, or exports were retained.

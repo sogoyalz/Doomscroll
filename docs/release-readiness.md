@@ -34,7 +34,10 @@ release archive.
 
 ## Live acceptance gate — partially verified
 
-The installed candidate now passes a [ten-view live capture smoke sample](live-capture-2026-10-30.md), with ten fiber-derived IDs and an exact capture-counter increase. Live persisted-count reconciliation and the remaining matrix below are still pending.
+The installed candidate now passes a [ten-view live capture smoke sample](live-capture-2026-10-30.md), with ten fiber-derived IDs and an exact capture-counter increase. A follow-up
+ten-view sample also received ten successful worker save acknowledgements with
+zero skips or unconfirmed deliveries. Independent popup-count reconciliation
+and the remaining matrix below are still pending.
 
 A limited [live layout smoke check](live-check-2026-10-30.md) found and verified
 fixes for zero-height wrappers and duplicate audio links. It does not replace
