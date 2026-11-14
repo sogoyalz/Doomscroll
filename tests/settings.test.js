@@ -307,3 +307,11 @@ describe('the intervention thresholds are validated too', () => {
     );
   });
 });
+
+it('drops unknown settings from both storage and incoming patches', async () => {
+  store['doomscroll:settings'] = { obsoleteFlag: true };
+  const result = await updateSettings({ unknownFlag: 'bad', debugHud: true });
+  expect(result.debugHud).toBe(true);
+  expect(result).not.toHaveProperty('obsoleteFlag');
+  expect(store['doomscroll:settings']).not.toHaveProperty('unknownFlag');
+});

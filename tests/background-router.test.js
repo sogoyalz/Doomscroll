@@ -17,6 +17,7 @@ let alarmListener;
 
 globalThis.chrome = {
   runtime: {
+    id: 'test',
     onMessage: {
       addListener: (fn) => {
         listener = fn;
@@ -24,7 +25,7 @@ globalThis.chrome = {
     },
     onInstalled: { addListener() {} },
     onStartup: { addListener() {} },
-    getURL: (p) => p,
+    getURL: (p) => `chrome-extension://test/${p}`,
   },
   alarms: {
     onAlarm: {
@@ -85,9 +86,10 @@ const payload = (over = {}) => ({
 });
 
 /** Invokes the router the way chrome.runtime does, and resolves its reply. */
-function send(message) {
+const trustedSender = { id: 'test', url: 'chrome-extension://test/src/options/index.html' };
+function send(message, sender = trustedSender) {
   return new Promise((resolve) => {
-    const returned = listener(message, {}, resolve);
+    const returned = listener(message, sender, resolve);
     if (returned !== true) resolve(undefined);
   });
 }
@@ -192,7 +194,7 @@ describe('the router itself', () => {
     // The mirror of the case above: returning anything but true here closes
     // the port before the async handler can reply, and every read silently
     // resolves undefined.
-    expect(listener({ type: 'GET_SETTINGS', payload: {} }, {}, () => {})).toBe(true);
+    expect(listener({ type: 'GET_SETTINGS', payload: {} }, trustedSender, () => {})).toBe(true);
   });
 
   it('wraps a handler result in the ok envelope', async () => {
@@ -453,5 +455,88 @@ describe('changing the session gap rebuilds history', () => {
     expect(reply.ok).toBe(true);
     expect(reply.data.sessionGapThresholdMs).toBe(7 * MIN);
     spy.mockRestore();
+  });
+});
+
+describe('delivery and sender regressions', () => {
+  it('assigns queued views a shared worker session and preserves it on retry', async () => {
+    const first = payload({ sessionId: 'doomscroll:unassigned' });
+    const second = payload({
+      sessionId: 'doomscroll:unassigned',
+      startedAt: NOW + 6000,
+      endedAt: NOW + 11000,
+    });
+    await send({ type: 'REEL_VIEW_LOGGED', payload: first });
+    await send({ type: 'REEL_VIEW_LOGGED', payload: second });
+    await send({ type: 'REEL_VIEW_LOGGED', payload: first });
+    const events = await getAllReelEvents();
+    expect(events).toHaveLength(2);
+    expect(events[0].sessionId).not.toBe('doomscroll:unassigned');
+    expect(events[0].sessionId).toBe(events[1].sessionId);
+  });
+
+  it('reconsiders a recent view when recovery beat the live message', async () => {
+    const event = payload({ startedAt: Date.now() - 5000, endedAt: Date.now() });
+    await send({ type: 'REEL_VIEW_LOGGED', payload: event });
+    detect.runDetection.mockClear();
+    await send(
+      { type: 'REEL_VIEW_LOGGED', payload: event },
+      {
+        id: 'test',
+        url: 'https://www.instagram.com/reels/example/',
+        tab: { id: 42 },
+      },
+    );
+    expect(await getAllReelEvents()).toHaveLength(1);
+    expect(detect.runDetection).toHaveBeenCalledOnce();
+  });
+
+  it.each(['CLEAR_DATA', 'UPDATE_SETTINGS', 'EXPORT_DATA', 'GET_SESSION_REELS'])(
+    'rejects %s from content scripts',
+    async (type) => {
+      expect(
+        await send(
+          { type, payload: {} },
+          {
+            id: 'test',
+            url: 'https://www.instagram.com/reels/example/',
+            tab: { id: 42 },
+          },
+        ),
+      ).toEqual({ ok: false, error: 'Unauthorized message sender' });
+    },
+  );
+
+  it('rejects a different extension even with a forged page URL', async () => {
+    expect(
+      (
+        await send(
+          { type: 'GET_SETTINGS', payload: {} },
+          {
+            id: 'other',
+            url: trustedSender.url,
+          },
+        )
+      ).ok,
+    ).toBe(false);
+  });
+
+  it('serves settings while a history export is blocked', async () => {
+    let release;
+    const spy = vi.spyOn(db, 'getAllReelEvents').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const exporting = send({ type: 'EXPORT_DATA', payload: { which: 'reels' } });
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    try {
+      expect((await send({ type: 'GET_SETTINGS', payload: {} })).ok).toBe(true);
+    } finally {
+      release([]);
+      await exporting;
+      spy.mockRestore();
+    }
   });
 });

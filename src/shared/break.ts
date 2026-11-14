@@ -95,7 +95,12 @@ export function isBreakState(value: unknown): value is BreakState {
   return (
     typeof candidate.startedAt === 'number' &&
     typeof candidate.endsAt === 'number' &&
-    typeof candidate.interventionId === 'string'
+    Number.isFinite(candidate.startedAt) &&
+    Number.isFinite(candidate.endsAt) &&
+    candidate.startedAt >= 0 &&
+    candidate.endsAt > candidate.startedAt &&
+    typeof candidate.interventionId === 'string' &&
+    candidate.interventionId.length > 0
   );
 }
 

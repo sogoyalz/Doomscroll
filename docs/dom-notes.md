@@ -278,3 +278,20 @@ tracked" again, check in this order:
 Zero on 2 and 3 together is the collapse described above. Note also that a
 single-reel permalink (`/reel/<code>/`) is a different layout from the feed
 (`/reels/`); the selectors here were researched against the feed.
+
+
+### November 2026 player compatibility
+
+A public Reels smoke test found a layout where `memoizedProps.media` is a Relay
+fragment reference rather than an object with `code`. Its player ancestors
+expose `memoizedProps.mediaId` as a decimal string. The bridge now also converts
+that ID to Instagram's URL-safe base64 shortcode, using `BigInt` to avoid
+precision loss. Both paths stay bounded by the existing fiber traversal limit.
+The active identity matched the displayed reel after scrolling, and all four
+mounted players resolved. Captions and authors were readable; audio attribution
+was absent in this sample. Opening comments required login, so authenticated
+comments behavior was not verified. No live captions or author names were saved
+as test fixtures.
+
+Regression coverage uses synthetic IDs in unit tests and the packaged-extension
+browser suite, preserving compatibility with the original `media.code` layout.

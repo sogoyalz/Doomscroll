@@ -211,3 +211,21 @@ describe('pausing tracking stops the bridge', () => {
     expect(el.getAttribute(SHORTCODE_ATTR)).toBeNull();
   });
 });
+
+describe('numeric media IDs in the newer player layout', () => {
+  it('converts a numeric ID to a shortcode without losing precision', () => {
+    const code = 'SYNTHETIC01';
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const id = [...code].reduce((n, c) => n * 64n + BigInt(alphabet.indexOf(c)), 0n);
+    expect(mw.shortcodeFromMediaId(String(id))).toBe(code);
+    const el = container();
+    el[FIBER_KEY] = { memoizedProps: { mediaId: String(id) }, return: null };
+    expect(mw.shortcodeFromFiber(el)).toBe(code);
+  });
+  it.each([null, 123, '', '0', '-1', '12x', '1'.repeat(100)])(
+    'rejects invalid IDs: %s',
+    (id) => {
+      expect(mw.shortcodeFromMediaId(id)).toBeNull();
+    },
+  );
+});

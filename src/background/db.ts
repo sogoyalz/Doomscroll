@@ -152,6 +152,10 @@ export async function recordReelView(
   return (await recordReelViewOnce(event, classification)).event;
 }
 
+export async function getReelEvent(id: string): Promise<ReelEvent | undefined> {
+  return (await getDB()).get('reelEvents', id);
+}
+
 export async function recordReelViewOnce(
   event: NewReelEvent,
   classification: ClassificationResult | null = null,

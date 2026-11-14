@@ -36,7 +36,7 @@ import {
   mergeExtractions,
   type ExtractedReel,
 } from './extractor.js';
-import { currentSessionId } from './session.js';
+import { UNASSIGNED_SESSION_ID } from '@shared/pending-views.js';
 import { keepPendingView } from '@shared/pending-views.js';
 import { noteStorageFailure } from '@shared/storage-health.js';
 import { recordExtraction } from '@shared/health.js';
@@ -220,7 +220,7 @@ async function reportView(
   const event: NewReelEvent = {
     id: crypto.randomUUID(),
     reelShortcode: reel.identity,
-    sessionId: await currentSessionId(view.endedAt, view.startedAt),
+    sessionId: UNASSIGNED_SESSION_ID,
     startedAt: view.startedAt,
     endedAt: view.endedAt,
     watchDurationMs: view.watchDurationMs,

@@ -21,6 +21,7 @@ const notifications = [];
 const tabMessages = [];
 globalThis.chrome = {
   runtime: {
+    id: 'test',
     onMessage: {
       addListener(fn) {
         receive = fn;
@@ -28,7 +29,7 @@ globalThis.chrome = {
     },
     onInstalled: { addListener() {} },
     onStartup: { addListener() {} },
-    getURL: (path) => path,
+    getURL: (path) => `chrome-extension://test/${path}`,
   },
   alarms: {
     create() {},
@@ -80,7 +81,18 @@ const event = (i, overrides = {}) => ({
   authorHandle: 'synthetic_creator',
   ...overrides,
 });
-function send(type, payload, sender = { tab: { id: 42 } }) {
+function send(
+  type,
+  payload,
+  sender = {
+    id: 'test',
+    url: 'chrome-extension://test/src/options/index.html',
+    tab: { id: 42 },
+  },
+) {
+  if (type === 'REEL_VIEW_LOGGED' && sender.tab) {
+    sender = { ...sender, url: 'https://www.instagram.com/reels/synthetic/' };
+  }
   return new Promise((resolve) => receive({ type, payload }, sender, resolve));
 }
 async function baseline() {
@@ -211,4 +223,24 @@ describe('real storage → classification → detection → intervention pipelin
     await send('REEL_VIEW_LOGGED', event(0, { startedAt: NOW - 6000, endedAt: NOW - 1000 }));
     expect(await getAllReelEvents()).toHaveLength(0);
   });
+});
+
+it('delivers a block when pending recovery saves the triggering view before its live message', async () => {
+  await baseline();
+  const extensionPage = { id: 'test', url: 'chrome-extension://test/src/options/index.html' };
+  for (let i = 0; i < 19; i++) await send('REEL_VIEW_LOGGED', event(i), extensionPage);
+  const last = event(19);
+  await keepPendingView(last);
+  alarm({ name: 'doomscroll:delivery' });
+  await send('GET_STATS', { range: 'today' }, extensionPage);
+  expect(await getAllReelEvents()).toHaveLength(20);
+  expect(tabMessages).toHaveLength(0);
+  const before = (await getDetectionLog()).reduce((n, row) => n + row.occurrences, 0);
+  await send('REEL_VIEW_LOGGED', last);
+  expect(tabMessages).toHaveLength(1);
+  expect(tabMessages[0].level).toBe('block');
+  expect((await getDetectionLog()).reduce((n, row) => n + row.occurrences, 0)).toBe(before);
+  await send('REEL_VIEW_LOGGED', last);
+  expect(tabMessages).toHaveLength(1);
+  expect(await getAllReelEvents()).toHaveLength(20);
 });

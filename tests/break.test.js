@@ -119,3 +119,15 @@ describe('shouldRemind', () => {
     expect(BREAK_GRACE_MS).toBeLessThan((BREAK_MINUTES * MINUTE) / 10);
   });
 });
+
+it.each([NaN, Infinity, -Infinity, -1])(
+  'rejects invalid persisted break timestamps: %s',
+  (value) => {
+    expect(isBreakState({ startedAt: value, endsAt: 1000, interventionId: 'i1' })).toBe(false);
+    expect(isBreakState({ startedAt: 0, endsAt: value, interventionId: 'i1' })).toBe(false);
+  },
+);
+it('rejects inverted and empty break state', () => {
+  expect(isBreakState({ startedAt: 1000, endsAt: 500, interventionId: 'i1' })).toBe(false);
+  expect(isBreakState({ startedAt: 0, endsAt: 1000, interventionId: '' })).toBe(false);
+});

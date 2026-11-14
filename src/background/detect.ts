@@ -104,6 +104,7 @@ export async function runDetection(
   sessionId: string,
   settings: UserSettings,
   now: number = Date.now(),
+  record = true,
 ): Promise<PatternDetection> {
   const recent = await getRecentSessionEvents(sessionId, settings.patternWindowSize);
 
@@ -134,6 +135,9 @@ export async function runDetection(
   detection.streak = detection.category
     ? await getSessionStreak(sessionId, detection.category)
     : 0;
+
+  // A live retry can reconsider delivery without counting another view.
+  if (!record) return detection;
 
   const wouldAct =
     settings.interventionEnabled &&

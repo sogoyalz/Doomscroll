@@ -117,7 +117,9 @@ function mergeSettings(base: UserSettings, patch: unknown): UserSettings {
 
   const merged = {
     ...base,
-    ...incoming,
+    ...Object.fromEntries(
+      Object.entries(incoming).filter(([key]) => Object.hasOwn(DEFAULT_SETTINGS, key)),
+    ),
     // Spread rather than replaced, so a patch touching one threshold does not
     // silently drop the other three. Validated by mergeLevels below.
     interventionLevels: mergeLevels(base.interventionLevels, incoming.interventionLevels),

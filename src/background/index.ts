@@ -21,6 +21,7 @@
 import {
   clearAllData,
   getAllReelEvents,
+  getReelEvent,
   getDailyAggregates,
   getDetectionLog,
   getInterventionLog,
@@ -54,6 +55,7 @@ import { createSerialQueue } from '@shared/serial.js';
 import { currentSessionId, SESSION_KEY } from './session.js';
 import {
   clearPendingViews,
+  UNASSIGNED_SESSION_ID,
   forgetPendingView,
   isNewReelEvent,
   readPendingViews,
@@ -130,6 +132,18 @@ const handlers: HandlerMap = {
     // on a malformed payload would have been reported to the user as "reels
     // aren't being saved — usually a full disk", sending them to look at the
     // one thing that was fine.
+    const previous = await getReelEvent(payload.id);
+    if (previous) payload = previous;
+    else if (payload.sessionId === UNASSIGNED_SESSION_ID) {
+      payload = {
+        ...payload,
+        sessionId: await currentSessionId(
+          payload.endedAt,
+          settings.sessionGapThresholdMs,
+          payload.startedAt,
+        ),
+      };
+    }
     const classification = classifyReel(payload, settings.classificationMode);
 
     let inserted: boolean;
@@ -153,7 +167,14 @@ const handlers: HandlerMap = {
     await forgetPendingView(payload.id);
     // A previous worker may have saved this view and stopped before marking
     // its day dirty. Retry bookkeeping, while keeping analysis once per view.
-    if (!inserted) return { queued: true };
+    // A recovery alarm can win the race with live delivery. A recent live
+    // duplicate still gets a chance to interrupt; persisted cooldowns prevent
+    // repeated prompts. Historical recovery never interrupts unrelated tabs.
+    const live =
+      sender.tab?.id !== undefined &&
+      sender.url?.startsWith('https://www.instagram.com/') === true &&
+      Date.now() - payload.endedAt < 60_000;
+    if (!inserted && !live) return { queued: true };
 
     // Everything below is analysis of what was just written. It must not be
     // able to fail the write: the reel is recorded either way, and that is
@@ -163,11 +184,14 @@ const handlers: HandlerMap = {
       // Detection always runs and always logs, whether or not anything is
       // allowed to act on it — that separation is what made the log-only
       // period possible and is worth keeping.
-      const detection = await runDetection(payload.sessionId, settings);
+      const detection = await runDetection(payload.sessionId, settings, Date.now(), inserted);
 
       // Interrupting is a separate decision with its own thresholds and
       // cooldowns, and it no-ops unless the user has switched it on.
-      if (sender.tab?.id !== undefined) {
+      if (
+        sender.tab?.id !== undefined &&
+        sender.url?.startsWith('https://www.instagram.com/')
+      ) {
         await maybeIntervene(detection, settings, payload.sessionId, sender.tab.id);
       }
     } catch (err) {
@@ -299,7 +323,11 @@ const handlers: HandlerMap = {
   async CLEAR_DATA() {
     await chrome.storage.local.set({ [DISCARD_VIEWS_BEFORE_KEY]: Date.now() });
     await clearPendingViews();
-    await chrome.storage.local.remove([SESSION_KEY, 'doomscroll:interventionState']);
+    await chrome.storage.local.remove([
+      SESSION_KEY,
+      'doomscroll:interventionState',
+      'doomscroll:interventionRetryAfter',
+    ]);
     await clearAllData();
     // Two pieces of transient state in chrome.storage that outlive the wipe
     // and go on referring to history that is gone. A break would keep
@@ -321,7 +349,41 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
   // failure instead of hanging until the port closes.
   if (typeof handler !== 'function' || !Object.hasOwn(handlers, message?.type)) return false;
 
-  serializeHistory(() => handler(message.payload, sender))
+  const extensionPage =
+    sender.id === chrome.runtime.id &&
+    typeof sender.url === 'string' &&
+    sender.url.startsWith(chrome.runtime.getURL(''));
+  const contentCommands = new Set([
+    'GET_SETTINGS',
+    'GET_SESSION_ID',
+    'REEL_VIEW_LOGGED',
+    'INTERVENTION_DISMISSED',
+    'START_BREAK',
+    'END_BREAK',
+  ]);
+  let instagramContent = false;
+  try {
+    const url = new URL(sender.url ?? '');
+    instagramContent =
+      sender.id === chrome.runtime.id &&
+      sender.tab?.id !== undefined &&
+      url.origin === 'https://www.instagram.com' &&
+      !/^\/(direct|accounts)(\/|$)/.test(url.pathname);
+  } catch {
+    /* Missing or malformed sender URLs are untrusted. */
+  }
+  if (!extensionPage && !(instagramContent && contentCommands.has(message.type))) {
+    sendResponse({ ok: false, error: 'Unauthorized message sender' });
+    return false;
+  }
+
+  // Settings reads cannot mutate history and should remain responsive during
+  // exports/rebuilds. GET_STATS does write aggregates, so stays serialized.
+  const request =
+    message.type === 'GET_SETTINGS'
+      ? Promise.resolve().then(() => handler(message.payload, sender))
+      : serializeHistory(() => handler(message.payload, sender));
+  request
     .then((result) => sendResponse({ ok: true, data: result }))
     .catch((err: unknown) => {
       console.error(`Doomscroll: ${message.type} failed`, err);

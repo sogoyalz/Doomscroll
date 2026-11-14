@@ -1,5 +1,8 @@
 import type { NewReelEvent } from './types.js';
 
+/** Assigned by the worker after the view has been durably queued. */
+export const UNASSIGNED_SESSION_ID = 'doomscroll:unassigned';
+
 export const PENDING_VIEW_PREFIX = 'doomscroll:pendingView:';
 export const PENDING_VIEW_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export const DISCARD_VIEWS_BEFORE_KEY = 'doomscroll:discardViewsBefore';

@@ -25,6 +25,9 @@ import {
 import type { PatternDetection } from '@shared/patterns.js';
 import type { InterventionLevel, InterventionLogEntry, UserSettings } from '@shared/types.js';
 
+const RETRY_KEY = 'doomscroll:interventionRetryAfter';
+export const DELIVERY_RETRY_MS = 60_000;
+
 const STATE_KEY = 'doomscroll:interventionState';
 
 /**
@@ -40,9 +43,18 @@ export async function readState(): Promise<InterventionState> {
     if (!stored || typeof stored !== 'object') return { ...EMPTY_STATE };
     const state = stored as Partial<InterventionState>;
     return {
-      lastFiredAt: state.lastFiredAt ?? {},
-      sessionId: state.sessionId ?? null,
-      firedInSession: state.firedInSession ?? [],
+      lastFiredAt: Object.fromEntries(
+        Object.entries(state.lastFiredAt ?? {}).filter(
+          ([level, at]) =>
+            ['notify', 'overlay', 'block'].includes(level) &&
+            typeof at === 'number' &&
+            Number.isFinite(at),
+        ),
+      ),
+      sessionId: typeof state.sessionId === 'string' ? state.sessionId : null,
+      firedInSession: Array.isArray(state.firedInSession)
+        ? state.firedInSession.filter((level) => ['notify', 'overlay', 'block'].includes(level))
+        : [],
     };
   } catch {
     return { ...EMPTY_STATE };
@@ -91,6 +103,21 @@ export async function maybeIntervene(
   if (!decision.act || !decision.level) return null;
 
   const level = decision.level;
+  const { [RETRY_KEY]: storedRetry } = await chrome.storage.local.get(RETRY_KEY);
+  const retryAfter: Partial<Record<InterventionLevel, number>> =
+    storedRetry && typeof storedRetry === 'object' ? storedRetry : {};
+  if (
+    typeof retryAfter?.[level] === 'number' &&
+    Number.isFinite(retryAfter[level]) &&
+    now < retryAfter[level]!
+  ) {
+    return null;
+  }
+  // Persist before delivery so worker eviction cannot create a tight retry loop.
+  // Failed delivery does not consume the once-per-session allowance.
+  await chrome.storage.local.set({
+    [RETRY_KEY]: { ...retryAfter, [level]: now + DELIVERY_RETRY_MS },
+  });
 
   // Recorded before it is shown, and before the state is updated. If the
   // delivery fails the row still exists with outcome 'pending', which is the
@@ -119,6 +146,7 @@ export async function maybeIntervene(
   if (!delivered) return null;
   await putInterventionLog({ ...entry, deliveredAt: now });
   await writeState(recordFired(state, level, sessionId, now));
+  await chrome.storage.local.set({ [RETRY_KEY]: { ...retryAfter, [level]: 0 } });
 
   return level;
 }

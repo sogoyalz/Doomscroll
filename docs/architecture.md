@@ -51,7 +51,6 @@ instagram.com
 │  │                  spent under an overlay    │
 │  ├─ extractor.ts    caption / hashtags /      │
 │  │                  audio / author / identity │
-│  ├─ session.ts      session id + gap rule     │
 │  ├─ overlay.ts      prompt / soft block /     │
 │  │                  break reminder            │
 │  ├─ navigate.ts     the one place the page    │
@@ -70,6 +69,7 @@ instagram.com
 ┌───────────────────────────────────────────────┴─┐
 │ background/index.ts      never touches the page  │
 │  ├─ typed message router                         │
+│  ├─ session.ts     serialized session assignment │
 │  ├─ db.ts          IndexedDB: reelEvents,        │
 │  │                 sessions, dailyAggregates,    │
 │  │                 detectionLog, interventionLog │

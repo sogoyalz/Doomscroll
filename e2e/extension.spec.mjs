@@ -343,3 +343,29 @@ test('browser restart recovers pending views exactly once and restores missing a
     .toBe(0);
   expect(await events()).toHaveLength(0);
 });
+
+test('numeric media IDs in the new Instagram player layout remain stable while scrolling', async () => {
+  const page = await feed();
+  await page.evaluate(() => {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    for (const [i, el] of [...document.querySelectorAll('[data-reel]')].entries()) {
+      const shortcode = 'SYNTHETIC0' + i;
+      const id = [...shortcode].reduce((n, c) => n * 64n + BigInt(alphabet.indexOf(c)), 0n);
+      el.querySelector('video').__reactFiber$fixture = {
+        memoizedProps: { mediaId: String(id) },
+        return: null,
+      };
+      el.removeAttribute('data-doomscroll-shortcode');
+    }
+  });
+  await expect(page.locator('[data-reel="1"]')).toHaveAttribute(
+    'data-doomscroll-shortcode',
+    'SYNTHETIC01',
+  );
+  await advance(page, 1);
+  await page.waitForTimeout(400);
+  await advance(page, 2);
+  await expect
+    .poll(async () => (await events()).some((e) => e.reelShortcode === 'SYNTHETIC01'))
+    .toBe(true);
+});

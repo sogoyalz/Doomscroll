@@ -24,7 +24,7 @@ export interface InterventionSummaryRow {
   shown: number;
   accepted: number;
   bypassed: number;
-  /** Shown but never answered, or never delivered at all. */
+  /** Shown but never answered. */
   pending: number;
   /** Breaks that actually began — one per accepted prompt. */
   breaks: number;
@@ -51,6 +51,8 @@ export function summarizeInterventions(
   const rows = new Map<InterventionLevel, InterventionSummaryRow>();
 
   for (const entry of entries) {
+    // Older records without delivery metadata remain compatible.
+    if (entry.deliveredAt === null) continue;
     const row = rows.get(entry.level) ?? {
       level: entry.level,
       shown: 0,

@@ -210,12 +210,13 @@ The overlay half matters because a prompt pauses the video and then sits there;
 without it the extension would inflate the watch time of the reel it just
 interrupted.
 
-**Sessions** (`content/session.ts`) are gap-based: a stretch of scrolling with
+**Sessions** (`background/session.ts`) are gap-based: a stretch of scrolling with
 no gap longer than `sessionGapThresholdMs` (default 2 min). The id lives in
 `chrome.storage.local` so it survives SPA navigation and is shared across tabs
 — a per-tab counter would split one session the moment a reel opened in a new
-tab. Concurrent tabs can race and briefly mint two ids; that splits a session
-rather than corrupting anything, and is not worth a lock.
+tab. The content script durably queues each view before contacting the worker.
+The worker serializes session assignment while saving it, so concurrent tabs
+share a session and a failed worker request does not create one-reel sessions.
 
 ---
 

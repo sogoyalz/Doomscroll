@@ -176,6 +176,11 @@ describe('recordFired', () => {
 });
 
 describe('summarizeInterventions', () => {
+  it('excludes failed deliveries from shown and pending counts', () => {
+    expect(
+      summarizeInterventions([{ level: 'notify', deliveredAt: null, outcome: 'pending' }]),
+    ).toEqual([]);
+  });
   const entry = (over = {}) => ({
     id: `i${Math.random()}`,
     at: NOW,

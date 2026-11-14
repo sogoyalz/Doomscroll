@@ -213,6 +213,8 @@ export function Options() {
   // than having failed to ask. Derived rather than stored, so the welcome
   // retires itself the moment there is history and there is no "dismissed"
   // flag to go stale.
+  const interventionSummary = summarizeInterventions(interventions);
+  const failedDeliveries = interventions.filter((entry) => entry.deliveredAt === null).length;
   const brandNew = panelsFailed === 0 && log.length === 0 && daily.length === 0;
   const readiness = baselineStatus(daily);
   const baselineReady = readiness.ready;
@@ -321,39 +323,50 @@ export function Options() {
         <section className="section">
           <h2 className="section-label">Intervention history</h2>
           <p className="section-note">
-            These counts record intervention decisions and your responses. A decision may not
-            have reached the page. “No early end recorded” means this extension did not receive
-            a request to end the break early; it does not prove you stopped scrolling or measure
-            activity on another device. These numbers do not establish effectiveness.
+            These counts include delivered prompts and your responses. Failed deliveries are
+            excluded; older records without delivery information are included. “No early end
+            recorded” means this extension did not receive a request to end the break early; it
+            does not prove you stopped scrolling or measure activity on another device. These
+            numbers do not establish effectiveness.
           </p>
-          <table className="log">
-            <thead>
-              <tr>
-                <th>Level</th>
-                <th className="num">Decisions</th>
-                <th className="num">Took a break</th>
-                <th className="num">Dismissed</th>
-                <th className="num">No recorded response</th>
-                <th className="num">No early end recorded</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summarizeInterventions(interventions).map((row) => (
-                <tr key={row.level}>
-                  <td>{LEVEL_LABELS[row.level]}</td>
-                  <td className="num">{row.shown}</td>
-                  <td className="num">{row.accepted}</td>
-                  <td className="num">{row.bypassed}</td>
-                  <td className="num">{row.pending}</td>
-                  <td className="num">
-                    {/* A dash, not 0 of 0: no breaks taken is an absence of
-                        evidence about breaks, not evidence they fail. */}
-                    {row.breaks > 0 ? `${row.breaks - row.brokenEarly} of ${row.breaks}` : '—'}
-                  </td>
+          {failedDeliveries > 0 && (
+            <p className="section-note">
+              {failedDeliveries} delivery attempts failed. These are excluded from the counts
+              below.
+            </p>
+          )}
+          {interventionSummary.length > 0 && (
+            <table className="log">
+              <thead>
+                <tr>
+                  <th>Level</th>
+                  <th className="num">Shown</th>
+                  <th className="num">Took a break</th>
+                  <th className="num">Dismissed</th>
+                  <th className="num">No recorded response</th>
+                  <th className="num">No early end recorded</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {interventionSummary.map((row) => (
+                  <tr key={row.level}>
+                    <td>{LEVEL_LABELS[row.level]}</td>
+                    <td className="num">{row.shown}</td>
+                    <td className="num">{row.accepted}</td>
+                    <td className="num">{row.bypassed}</td>
+                    <td className="num">{row.pending}</td>
+                    <td className="num">
+                      {/* A dash, not 0 of 0: no breaks taken is an absence of
+                        evidence about breaks, not evidence they fail. */}
+                      {row.breaks > 0
+                        ? `${row.breaks - row.brokenEarly} of ${row.breaks}`
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
       )}
 
@@ -553,7 +566,7 @@ export function Options() {
       <section className="section">
         <h2 className="section-label">Your data</h2>
         <p className="section-note">
-          Reel history is kept for 90 days. Daily summaries are kept longer.
+          Reel history is kept for 90 days. Daily summaries remain until you delete your data.
         </p>
         <div className="row">
           <button

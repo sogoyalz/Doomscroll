@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { closeDB, getInterventionLog, putInterventionLog } from '../src/background/db.ts';
 import {
+  DELIVERY_RETRY_MS,
   beginBreak,
   endBreak,
   maybeIntervene,
@@ -161,7 +162,6 @@ describe('maybeIntervene', () => {
     expect(entry.outcome).toBe('pending');
     expect(entry.deliveredAt).toBeNull();
     expect((await readState()).firedInSession).toEqual([]);
-    tabSendFails = false;
     expect(
       await maybeIntervene(
         detection({ streak: LEVELS.overlayAfterStreak }),
@@ -169,6 +169,17 @@ describe('maybeIntervene', () => {
         'session-1',
         42,
         NOW + 1000,
+      ),
+    ).toBeNull();
+    expect(await getInterventionLog()).toHaveLength(1);
+    tabSendFails = false;
+    expect(
+      await maybeIntervene(
+        detection({ streak: LEVELS.overlayAfterStreak }),
+        on,
+        'session-1',
+        42,
+        NOW + DELIVERY_RETRY_MS,
       ),
     ).toBe('overlay');
   });
@@ -441,4 +452,32 @@ describe('cost on the path almost every reel takes', () => {
     expect(get).toHaveBeenCalled();
     get.mockRestore();
   });
+});
+
+it('a failed notification does not suppress escalation to a working overlay', async () => {
+  const spy = vi
+    .spyOn(chrome.notifications, 'create')
+    .mockRejectedValueOnce(new Error('denied'));
+  try {
+    expect(await maybeIntervene(detection(), on, 's1', 42, NOW)).toBeNull();
+    expect(
+      await maybeIntervene(
+        detection({ streak: LEVELS.overlayAfterStreak }),
+        on,
+        's1',
+        42,
+        NOW + 1000,
+      ),
+    ).toBe('overlay');
+  } finally {
+    spy.mockRestore();
+  }
+});
+it('repairs malformed persisted cooldown state', async () => {
+  store['doomscroll:interventionState'] = {
+    lastFiredAt: { notify: Infinity, bad: 10 },
+    sessionId: 12,
+    firedInSession: 'notify',
+  };
+  expect(await readState()).toEqual({ lastFiredAt: {}, sessionId: null, firedInSession: [] });
 });

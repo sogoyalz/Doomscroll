@@ -32,9 +32,25 @@ const FIBER_WALK_LIMIT = 120;
 // a re-render can drop an attribute React does not manage.
 const RETAG_INTERVAL_MS = 1000;
 
+/** Instagram's numeric media ID encodes the same URL-safe base64 shortcode. */
+export function shortcodeFromMediaId(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^[1-9]\d{0,24}$/.test(value)) return null;
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  let remaining = BigInt(value);
+  let code = '';
+  while (remaining > 0n) {
+    code = alphabet[Number(remaining % 64n)]! + code;
+    remaining /= 64n;
+  }
+  return code;
+}
+
 interface FiberNode {
   return: FiberNode | null;
-  memoizedProps?: { media?: { code?: unknown } };
+  memoizedProps?: {
+    mediaId?: unknown;
+    media?: { code?: unknown };
+  };
 }
 
 // React derives one random suffix per page, so the key is the same on every
@@ -80,7 +96,8 @@ function readFiber(el: HTMLElement): { code: string | null; hasFiber: boolean } 
     if (node) hasFiber = true;
     for (let depth = 0; depth < FIBER_WALK_LIMIT && node && !visited.has(node); depth++) {
       visited.add(node);
-      const code = node.memoizedProps?.media?.code;
+      const code =
+        node.memoizedProps?.media?.code ?? shortcodeFromMediaId(node.memoizedProps?.mediaId);
       if (typeof code === 'string' && code) return { code, hasFiber: true };
       node = node.return;
     }
@@ -104,7 +121,7 @@ export function tagContainers(): void {
   // beyond this check, no attribute writes. The switch says the extension
   // stops watching the page, and this is the half of it that used to carry on
   // regardless because the MAIN world cannot reach chrome.storage to know.
-  if (trackingPaused()) return;
+  if (trackingPaused() || !document.querySelector(VIDEO_PLAYER_SELECTOR)) return;
 
   const containers = findReelContainers();
   let resolved = 0;
