@@ -1,0 +1,5 @@
+# Verified public model SHA-256 checksums, not credentials.
+# Only these findings in this exact commit are ignored; all other scans remain active.
+9b4268a581b2f7eca2ee0d4954a1821e0799b0ed:scripts/model-assets.json:generic-api-key:5
+9b4268a581b2f7eca2ee0d4954a1821e0799b0ed:scripts/model-assets.json:generic-api-key:6
+9b4268a581b2f7eca2ee0d4954a1821e0799b0ed:scripts/model-assets.json:generic-api-key:8
