@@ -33,6 +33,18 @@ doomscroll-*.zip.sha256
 .workspace-backup/
 .dev/
 .code-review-graph/
+WORKSPACE.md
+
+# Local assistant and editor configuration
+.claude/
+.codex/
+.cursor/
+.windsurf/
+.mcp.json
+mcp.json
+CLAUDE.md
+AGENTS.md
+GEMINI.md
 
 # Private captures and debug output
 Screenshot*
