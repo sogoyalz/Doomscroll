@@ -10,7 +10,7 @@
 // about how the viewer feels. Copy built on top of it has to preserve that.
 
 import { LEXICON, TIE_BREAK_ORDER, type ClassifiableCategory } from './lexicon.js';
-import { isCharged } from './taxonomy.js';
+import { TOPIC_CATEGORIES, CHARGED_CATEGORIES, isCharged } from './taxonomy.js';
 import type { ClassificationResult } from './types.js';
 
 export interface ClassifierInput {
@@ -62,6 +62,14 @@ function tokenize(normalized: string): Set<string> {
 
 interface Score {
   score: number;
+  /**
+   * Points from words, phrases, and hashtags the creator wrote.
+   *
+   * Hearts and song titles are excluded. A decorative ❤️ or a romantic track
+   * name was outranking a caption that was actually about the outfit or the
+   * song, because a tie prefers a charged category.
+   */
+  lexical: number;
   matched: Set<string>;
   /**
    * True when a caption or hashtag matched — i.e. the creator *wrote* about
@@ -95,7 +103,9 @@ function scoreText(
   const tokens = tokenize(normalized);
   for (const word of lexicon.words) {
     if (tokens.has(word)) {
-      into.score += WEIGHT_WORD * weightFactor;
+      const points = WEIGHT_WORD * weightFactor;
+      into.score += points;
+      if (authored) into.lexical += points;
       into.matched.add(word);
       mark();
     }
@@ -106,7 +116,9 @@ function scoreText(
   const padded = ` ${normalized} `;
   for (const phrase of lexicon.phrases) {
     if (padded.includes(` ${phrase} `)) {
-      into.score += WEIGHT_PHRASE * weightFactor;
+      const points = WEIGHT_PHRASE * weightFactor;
+      into.score += points;
+      if (authored) into.lexical += points;
       into.matched.add(phrase);
       mark();
     }
@@ -125,7 +137,7 @@ function scoreText(
 
 function scoreCategory(category: ClassifiableCategory, input: ClassifierInput): Score {
   const lexicon = LEXICON[category];
-  const result: Score = { score: 0, matched: new Set(), authored: false };
+  const result: Score = { score: 0, lexical: 0, matched: new Set(), authored: false };
 
   if (input.captionText) scoreText(lexicon, input.captionText, 1, true, result);
   // Audio matches count toward the score but not toward `authored`: the user
@@ -137,6 +149,7 @@ function scoreCategory(category: ClassifiableCategory, input: ClassifierInput): 
   for (const tag of lexicon.hashtags) {
     if (tags.has(tag)) {
       result.score += WEIGHT_HASHTAG;
+      result.lexical += WEIGHT_HASHTAG;
       result.matched.add(`#${tag}`);
       result.authored = true;
       curated.add(tag);
@@ -189,20 +202,29 @@ export function classify(input: ClassifierInput): ClassificationResult | null {
     ...scoreCategory(category, input),
   }));
 
+  // When the creator wrote a category word, that decides the reel. A song
+  // title and a decorative heart still score, but they cannot replace a
+  // written category or win a tie against one.
+  const written = scores.some((candidate) => candidate.lexical > 0);
+  const metric = (candidate: (typeof scores)[number]) =>
+    written ? candidate.lexical : candidate.score;
+
   // TIE_BREAK_ORDER drives the iteration, and a strict `>` means the first
   // category in that order keeps the lead on an exact tie.
   let best = scores[0]!;
   let runnerUp = 0;
   for (const candidate of scores) {
-    if (candidate.score > best.score) {
-      runnerUp = best.score;
+    const value = metric(candidate);
+    const lead = metric(best);
+    if (value > lead) {
+      runnerUp = lead;
       best = candidate;
-    } else if (candidate !== best && candidate.score > runnerUp) {
-      runnerUp = candidate.score;
+    } else if (candidate !== best && value > runnerUp) {
+      runnerUp = value;
     }
   }
 
-  const confidence = confidenceFor(best.score, runnerUp);
+  const confidence = confidenceFor(metric(best), runnerUp);
 
   // Charged content is favoured for recall. A real emotional signal must not
   // be dropped to neutral just because it is weak or ties with another charged
@@ -238,4 +260,32 @@ function confidenceFor(top: number, second: number): number {
   const strength = Math.min(1, top / SATURATION_SCORE);
   const separation = (top - second) / top;
   return strength * (0.5 + 0.5 * separation);
+}
+
+/** Independent, conservative labels for review. Unknown is not neutral. */
+export function classifyDimensions(input: ClassifierInput): {
+  topic: string | null;
+  tone: string | null;
+} {
+  // Hashtags are extracted separately: do not count the same tag as prose too.
+  const authored = {
+    ...input,
+    captionText: input.captionText?.replace(/#[\p{L}\p{N}\p{M}_]+/gu, '') ?? null,
+    audioName: null,
+  };
+  const choose = (categories: readonly ClassifiableCategory[]) => {
+    const ranked = categories
+      .map((category) => ({
+        category,
+        score: scoreCategory(category, authored).lexical,
+      }))
+      .sort((a, b) => b.score - a.score);
+    const first = ranked[0]!;
+    const second = ranked[1]?.score ?? 0;
+    // A tied or weak reading is unresolved, not an arbitrary emotional label.
+    return first.score > second && confidenceFor(first.score, second) >= MIN_CONFIDENCE
+      ? first.category
+      : null;
+  };
+  return { topic: choose(TOPIC_CATEGORIES), tone: choose(CHARGED_CATEGORIES) };
 }

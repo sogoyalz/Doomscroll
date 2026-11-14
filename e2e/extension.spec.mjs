@@ -58,8 +58,8 @@ async function events() {
 async function feed() {
   const page = await context.newPage();
   await page.goto('https://www.instagram.com/reels/synthetic/');
-  await expect(page.locator('[data-doomscroll-shortcode]').first()).toHaveAttribute(
-    'data-doomscroll-shortcode',
+  await expect(page.locator('[data-reel-code]').first()).toHaveAttribute(
+    'data-reel-code',
     'SYNTHETIC00',
   );
   return page;
@@ -127,8 +127,8 @@ test('packaged popup and settings load with a working pause control', async () =
   await expect(popup.locator('body')).not.toContainText('Couldn’t load');
   const pausedFeed = await context.newPage();
   await pausedFeed.goto('https://www.instagram.com/reels/synthetic/');
-  await expect(pausedFeed.locator('html')).toHaveAttribute('data-doomscroll-tracking', 'off');
-  await expect(pausedFeed.locator('[data-doomscroll-shortcode]')).toHaveCount(0);
+  await expect(pausedFeed.locator('html')).toHaveAttribute('data-reel-watch', 'off');
+  await expect(pausedFeed.locator('[data-reel-code]')).toHaveCount(0);
 });
 
 test('real content scripts record scrolling, extract audio, and respect SPA privacy exclusions', async () => {
@@ -137,7 +137,7 @@ test('real content scripts record scrolling, extract audio, and respect SPA priv
   await page.waitForTimeout(400); // Exercise the real 250ms dwell threshold.
   await advance(page, 1);
   await expect.poll(async () => (await events()).length).toBe(1);
-  await expect(page.locator('#doomscroll-hud')).toContainText(
+  await expect(page.locator('#reel-diag')).toContainText(
     'reels: 1  saved: 1  skipped: 0  unconfirmed: 0',
   );
   expect((await events())[0]).toMatchObject({
@@ -153,7 +153,7 @@ test('real content scripts record scrolling, extract audio, and respect SPA priv
   await page.waitForTimeout(1200);
   await advance(page, 0);
   await expect.poll(async () => (await events()).length).toBe(2);
-  await expect(page.locator('#doomscroll-hud')).toContainText(
+  await expect(page.locator('#reel-diag')).toContainText(
     'reels: 2  saved: 2  skipped: 0  unconfirmed: 0',
   );
   expect((await events()).map((view) => view.reelShortcode).sort()).toEqual([
@@ -166,8 +166,8 @@ test('real content scripts record scrolling, extract audio, and respect SPA priv
   expect(await events()).toHaveLength(2);
   const accounts = await context.newPage();
   await accounts.goto('https://www.instagram.com/accounts/edit/');
-  await expect(accounts.locator('[data-doomscroll-shortcode]')).toHaveCount(0);
-  await expect(accounts.locator('#doomscroll-hud')).toHaveCount(0);
+  await expect(accounts.locator('[data-reel-code]')).toHaveCount(0);
+  await expect(accounts.locator('#reel-diag')).toHaveCount(0);
   expect(await events()).toHaveLength(2);
 });
 
@@ -355,11 +355,11 @@ test('numeric media IDs in the new Instagram player layout remain stable while s
         memoizedProps: { mediaId: String(id) },
         return: null,
       };
-      el.removeAttribute('data-doomscroll-shortcode');
+      el.removeAttribute('data-reel-code');
     }
   });
   await expect(page.locator('[data-reel="1"]')).toHaveAttribute(
-    'data-doomscroll-shortcode',
+    'data-reel-code',
     'SYNTHETIC01',
   );
   await advance(page, 1);
@@ -368,4 +368,83 @@ test('numeric media IDs in the new Instagram player layout remain stable while s
   await expect
     .poll(async () => (await events()).some((e) => e.reelShortcode === 'SYNTHETIC01'))
     .toBe(true);
+});
+
+test('human topic and tone reviews persist through reload and appear in export', async () => {
+  const page = await feed();
+  await page.waitForTimeout(400);
+  await advance(page, 1);
+  await expect.poll(async () => (await events()).length).toBe(1);
+  await page.close();
+  await options.reload();
+  await options.locator('.session-head').first().click();
+  await options.locator('.reel-review summary').first().click();
+  const review = options.locator('.reel-review').first();
+  await expect(review).toContainText('Suggested tone: sad');
+  await review.getByLabel('Correct topic').selectOption('music');
+  await review.getByLabel('Correct tone').selectOption('romantic');
+  await review.getByRole('button', { name: 'Save review' }).click();
+  await expect(review.getByRole('status')).toHaveText('Saved review');
+  await options.reload();
+  await options.locator('.session-head').first().click();
+  await options.locator('.reel-review summary').first().click();
+  await expect(options.getByLabel('Correct topic').first()).toHaveValue('music');
+  await expect(options.getByLabel('Correct tone').first()).toHaveValue('romantic');
+  expect((await send('EXPORT_DATA', { which: 'reels' })).csv).toContain(
+    '"music","romantic","","sad"',
+  );
+});
+
+test('bundled trained model classifies new views without a network service', async () => {
+  test.setTimeout(180000);
+  const engine = options.getByRole('combobox', { name: /Engine/ });
+  await engine.selectOption('local-ml');
+  await expect
+    .poll(async () => (await send('GET_SETTINGS')).classificationMode)
+    .toBe('local-ml');
+  const requests = [];
+  context.on('request', (request) => {
+    if (/^https?:/.test(request.url())) requests.push(request.url());
+  });
+  const now = Date.now();
+  await send('REEL_VIEW_LOGGED', {
+    id: 'model-smoke',
+    reelShortcode: 'MODELSMOKE',
+    sessionId: 'model-session',
+    startedAt: now,
+    endedAt: now + 2000,
+    watchDurationMs: 2000,
+    captionText: 'Trying on three different dresses for tonight',
+    hashtags: [],
+    audioName: 'Romantic love song',
+    authorHandle: 'synthetic_creator',
+  });
+  const [event] = await events();
+  expect(event.classificationDetails?.engine).toBe('deberta-nli-q8-v1');
+  expect(event.classificationDetails?.topic).toBe('fashion');
+  expect(event.classificationDetails?.tone).toBeNull();
+  expect(event.category).toBe('fashion');
+  await send('REEL_VIEW_LOGGED', {
+    id: 'model-music',
+    reelShortcode: 'MODELMUSIC',
+    sessionId: 'model-session',
+    startedAt: now + 3000,
+    endedAt: now + 5000,
+    watchDurationMs: 2000,
+    captionText: 'Playing the violin on stage with the orchestra ❤️',
+    hashtags: [],
+    audioName: 'Romantic love song',
+    authorHandle: 'synthetic_creator',
+  });
+  const music = (await events()).find((row) => row.id === 'model-music');
+  expect(music.classificationDetails).toMatchObject({
+    engine: 'deberta-nli-q8-v1',
+    topic: 'music',
+    tone: null,
+  });
+  expect(requests).toEqual([]);
+  const exported = await send('EXPORT_DATA', { which: 'reels' });
+  expect(exported.csv).toContain('deberta-nli-q8-v1');
+  await options.reload();
+  await expect(engine).toHaveValue('local-ml');
 });

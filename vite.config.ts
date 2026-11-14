@@ -16,6 +16,7 @@ export default defineConfig({
     // Preloading exists to hide network latency. Extension pages load from
     // local disk, so it buys nothing here and costs a duplicate request.
     modulePreload: false,
+    rollupOptions: { input: { model: 'src/model/index.html' } },
   },
   resolve: {
     alias: {
@@ -28,5 +29,9 @@ export default defineConfig({
     // default. Note jsdom does not implement innerText — extractor.ts falls
     // back to textContent, which is the path these tests exercise.
     environment: 'jsdom',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text'],
+    },
   },
 });

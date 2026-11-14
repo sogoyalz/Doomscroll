@@ -7,7 +7,7 @@ import {
 } from '../src/content/overlay.ts';
 
 function shadow() {
-  return document.getElementById('doomscroll-overlay')?.shadowRoot ?? null;
+  return document.getElementById('reel-interrupt')?.shadowRoot ?? null;
 }
 
 function buttonLabelled(match) {
@@ -36,7 +36,7 @@ describe('showOverlay', () => {
   it('renders in a shadow root attached to documentElement', () => {
     show();
     expect(shadow()).toBeTruthy();
-    expect(document.getElementById('doomscroll-overlay').parentElement).toBe(
+    expect(document.getElementById('reel-interrupt').parentElement).toBe(
       document.documentElement,
     );
   });
@@ -66,7 +66,7 @@ describe('showOverlay', () => {
   it('does not stack a second overlay over the first', () => {
     show();
     show();
-    expect(document.querySelectorAll('#doomscroll-overlay')).toHaveLength(1);
+    expect(document.querySelectorAll('#reel-interrupt')).toHaveLength(1);
   });
 });
 
@@ -163,7 +163,7 @@ describe('hideOverlay', () => {
   it('removes the panel and stops its timer', () => {
     show({ level: 'block' });
     hideOverlay();
-    expect(document.getElementById('doomscroll-overlay')).toBeNull();
+    expect(document.getElementById('reel-interrupt')).toBeNull();
     // A surviving interval would keep ticking against a detached node.
     expect(() => vi.advanceTimersByTime(20_000)).not.toThrow();
   });
@@ -235,7 +235,7 @@ describe('the break reminder', () => {
   it('does not stack on top of an interruption already showing', () => {
     showOverlay({ level: 'overlay', category: 'sad', streak: 12, onDismiss: vi.fn() });
     remind();
-    expect(document.querySelectorAll('#doomscroll-overlay')).toHaveLength(1);
+    expect(document.querySelectorAll('#reel-interrupt')).toHaveLength(1);
     // The interruption is the one on screen, not the reminder.
     expect(shadow().textContent).toContain('locked onto one thing');
   });

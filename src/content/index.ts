@@ -34,12 +34,14 @@ import {
   isIncomplete,
   isSameReel,
   mergeExtractions,
+  snapshotSettled,
   type ExtractedReel,
 } from './extractor.js';
-import { UNASSIGNED_SESSION_ID } from '@shared/pending-views.js';
+import { clampNewReelEvent, UNASSIGNED_SESSION_ID } from '@shared/pending-views.js';
 import { keepPendingView } from '@shared/pending-views.js';
 import { noteStorageFailure } from '@shared/storage-health.js';
-import { recordExtraction } from '@shared/health.js';
+import { deliverReelView } from '@shared/deliver-view.js';
+import { syncLayoutWarning } from './layout-warning.js';
 import { getSettings, SETTINGS_KEY } from '@shared/settings.js';
 import { send } from '@shared/client.js';
 import type { ExtensionMessage } from '@shared/messages.js';
@@ -72,6 +74,9 @@ let intersectionObserver: IntersectionObserver | null = null;
 let mutationObserver: MutationObserver | null = null;
 let mutationRoot: Node | null = null;
 let scrollContainer: HTMLElement | null = null;
+// Players do not come and go on a scroll frame. Rebuilt when the DOM mutates
+// and on the one-second heartbeat, so a scroll frame only measures geometry.
+let containerList: HTMLElement[] | null = null;
 let lastScrollScanAt = 0;
 let syncScheduled = false;
 let observing = false;
@@ -94,12 +99,19 @@ function scheduleSync(): void {
   });
 }
 
-function syncActiveReel(now: number = Date.now()): void {
+function reelContainers(refresh: boolean): HTMLElement[] {
+  if (!refresh && containerList?.every((container) => container.isConnected))
+    return containerList;
+  containerList = findReelContainers();
+  return containerList;
+}
+
+function syncActiveReel(now: number = Date.now(), refresh = false): void {
   if (!isTrackingSurface(location.pathname)) {
     stopObserving();
     return;
   }
-  const containers = findReelContainers();
+  const containers = reelContainers(refresh);
 
   if (intersectionObserver) {
     for (const container of containers) {
@@ -142,6 +154,7 @@ function reconcileActiveReel(now: number): void {
 
   const snapshot = snapshots.get(active);
   if (!snapshot) return;
+  if (snapshotSettled(snapshot, active)) return;
 
   const fresh = extractReel(active);
 
@@ -192,7 +205,10 @@ function ensureObservationTargets(now: number): void {
   const nextRoot = scrollContainer?.parentElement ?? document.body;
   if (nextRoot !== mutationRoot) {
     mutationObserver?.disconnect();
-    mutationObserver ??= new MutationObserver(() => scheduleSync());
+    mutationObserver ??= new MutationObserver(() => {
+      containerList = null;
+      scheduleSync();
+    });
     mutationObserver.observe(nextRoot, { childList: true, subtree: true });
     mutationRoot = nextRoot;
   }
@@ -217,7 +233,7 @@ async function reportView(
   reel: ExtractedReel,
   view: CompletedView<HTMLElement>,
 ): Promise<void> {
-  const event: NewReelEvent = {
+  const event: NewReelEvent = clampNewReelEvent({
     id: crypto.randomUUID(),
     reelShortcode: reel.identity,
     sessionId: UNASSIGNED_SESSION_ID,
@@ -228,12 +244,25 @@ async function reportView(
     hashtags: reel.hashtags,
     audioName: reel.audioName,
     authorHandle: reel.authorHandle,
-  };
+  });
 
   // Watch for Instagram's layout moving underneath us. Extraction degrades to
   // nulls rather than throwing, so without this a selector break looks
   // identical to a quiet week.
-  void recordExtraction({
+  pushHudRow(reel, event.watchDurationMs);
+  try {
+    const delivered = await deliverReelView(
+      event,
+      keepPendingView,
+      () => send('REEL_VIEW_LOGGED', event),
+    );
+    if (!delivered.stored) await noteStorageFailure(new Error('pending view was not stored'));
+    confirmHudDelivery(delivered.result.queued);
+  } catch {
+    // The worker retries a durable copy after reconnecting. The health sample
+    // is separate and must not block that.
+  }
+  void send('EXTRACTION_OBSERVED', {
     hasAuthor: Boolean(reel.authorHandle),
     hasText: Boolean(reel.captionText || reel.hashtags.length || reel.audioName),
     hasAudio: Boolean(reel.audioName),
@@ -241,25 +270,9 @@ async function reportView(
     audioChannel: reel.audioChannel,
     bridgeStatus: bridgeStatus(),
     now: view.endedAt,
+  }).catch(() => {
+    // A missed health sample must not surface in the page console.
   });
-
-  pushHudRow(reel, event.watchDurationMs);
-  try {
-    // Keep a durable copy before delivery. A lost message or acknowledgement
-    // is recovered by the worker's alarm; the event id makes retries safe.
-    await keepPendingView(event);
-  } catch (err) {
-    await noteStorageFailure(err);
-  }
-  try {
-    // sendMessage returns a promise here; without the catch, a rejection
-    // (service worker asleep, context invalidated during reload) surfaces as
-    // an unhandled rejection in the page console.
-    const result = await send('REEL_VIEW_LOGGED', event);
-    confirmHudDelivery(result.queued);
-  } catch {
-    // The worker retries the durable copy after reconnecting.
-  }
 }
 
 function startObserving(): void {
@@ -284,6 +297,7 @@ function startObserving(): void {
  * the caller flushes first, because that view really did finish.
  */
 function stopObserving(): void {
+  syncLayoutWarning(false);
   if (!observing) return;
   observing = false;
 
@@ -300,6 +314,7 @@ function stopObserving(): void {
   mutationRoot = null;
   scrollContainer?.removeEventListener('scroll', scheduleSync);
   scrollContainer = null;
+  containerList = null;
   // Resuming should re-bind immediately rather than sit out the backoff.
   lastScrollScanAt = 0;
   observed = new WeakSet();
@@ -309,7 +324,9 @@ async function applyTrackingSetting(): Promise<void> {
   const settings = await getSettings();
   trackingEnabled = settings.trackingEnabled;
   const { debugHud } = settings;
-  console.log(`[Doomscroll] tracking ${trackingEnabled ? 'enabled' : 'PAUSED'}`);
+  if (debugHud) {
+    console.log(`[Doomscroll] tracking ${trackingEnabled ? 'enabled' : 'PAUSED'}`);
+  }
 
   // Published for the MAIN-world bridge, which has no chrome.* at all and so
   // cannot read this setting itself. Without it that script kept walking React
@@ -354,9 +371,56 @@ function syncDwellClock(now: number = Date.now()): void {
  * origin, one tap from returning — this interrupts an automatic behaviour, it
  * does not lock anyone out.
  */
-function leaveTheFeed(destination: string = BREAK_DESTINATION): void {
+function leaveTheFeed(): void {
   hideOverlay();
-  goTo(destination);
+  // The worker also names a destination. Navigation is the one side effect
+  // that moves the person, so it stays pinned to the known Instagram home
+  // URL no matter what that reply contains.
+  goTo(BREAK_DESTINATION);
+}
+
+/**
+ * The interruption the worker is allowed to show.
+ *
+ * The listener used to spread `message.payload` straight into the overlay.
+ * A message with a missing level, a non-numeric streak, or a category far
+ * longer than any taxonomy label is not an interruption.
+ */
+function readIntervention(message: unknown): {
+  id: string;
+  level: 'notify' | 'overlay' | 'block';
+  category: string | null;
+  streak: number;
+} | null {
+  if (!message || typeof message !== 'object') return null;
+  const candidate = message as { type?: unknown; payload?: unknown };
+  if (
+    candidate.type !== 'INTERVENE' ||
+    !candidate.payload ||
+    typeof candidate.payload !== 'object'
+  ) {
+    return null;
+  }
+  const payload = candidate.payload as {
+    id?: unknown;
+    level?: unknown;
+    category?: unknown;
+    streak?: unknown;
+  };
+  const { id, level, category, streak } = payload;
+  if (typeof id !== 'string' || id.length === 0 || id.length > 128) return null;
+  if (level !== 'notify' && level !== 'overlay' && level !== 'block') return null;
+  if (!(category === null || (typeof category === 'string' && category.length <= 64)))
+    return null;
+  if (
+    typeof streak !== 'number' ||
+    !Number.isInteger(streak) ||
+    streak < 0 ||
+    streak > 10_000
+  ) {
+    return null;
+  }
+  return { id, level, category, streak };
 }
 
 /**
@@ -411,14 +475,6 @@ function checkBreak(now: number): void {
 }
 
 function start(): void {
-  // One of the three lines that log without the debug panel on, and none of
-  // them carry anything you watched — this one, the container count below, and
-  // the tracking-state line. Extraction degrades to nulls rather than
-  // throwing, so without this a broken content script and a quiet page look
-  // identical in the console, with no way to confirm the script even injected.
-  console.log('[Doomscroll] content script loaded on', location.pathname);
-
-  let loggedFirstScan = false;
   const onHeartbeat = () => {
     if (trackingEnabled && isTrackingSurface(location.pathname)) startObserving();
     else stopObserving();
@@ -426,16 +482,9 @@ function start(): void {
     const now = Date.now();
     ensureObservationTargets(now);
 
-    if (!loggedFirstScan) {
-      loggedFirstScan = true;
-      const count = findReelContainers().length;
-      // The single most useful diagnostic line: zero containers on a reels
-      // page means the selectors no longer match Instagram's current markup.
-      console.log(`[Doomscroll] found ${count} reel container(s) on this scan`);
-    }
-
-    syncActiveReel(now);
+    syncActiveReel(now, true);
     reconcileActiveReel(now);
+    syncLayoutWarning(bridgeStatus() === 'no-fiber');
     checkBreak(now);
     // Cheap, and the only thing that notices an overlay being dismissed by a
     // path that does not route through here.
@@ -466,8 +515,15 @@ function start(): void {
   // The one message that arrives rather than leaves. Everything else in this
   // file reports outward; interruptions are decided in the worker, which owns
   // the history and the cooldowns, and only the rendering happens here.
-  chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
-    if (message?.type !== 'INTERVENE') return false;
+  chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendResponse) => {
+    const payload = readIntervention(message);
+    if (!payload) return false;
+    // Another extension, or a sender that names a different id, cannot raise
+    // a prompt on the Instagram tab. Messages from this extension carry its id.
+    if (typeof sender?.id === 'string' && sender.id !== chrome.runtime.id) {
+      sendResponse({ ok: true, data: { shown: false } });
+      return false;
+    }
 
     // Nothing is shown over a paused tracker: the user has already said they
     // do not want this extension acting right now.
@@ -476,7 +532,7 @@ function start(): void {
       return false;
     }
 
-    const { id, level, category, streak } = message.payload;
+    const { id, level, category, streak } = payload;
     if (level === 'notify') {
       // Notifications are raised by the worker; nothing to render here.
       sendResponse({ ok: true, data: { shown: false } });
@@ -501,8 +557,6 @@ function start(): void {
           // half of the feature behind the failure of the bookkeeping about
           // it: a worker that could not be reached would leave the user on the
           // feed, having just asked to leave it.
-          let goTo: string | undefined;
-
           try {
             await chrome.runtime.sendMessage({
               type: 'INTERVENTION_DISMISSED',
@@ -516,17 +570,16 @@ function start(): void {
           if (userAction !== 'accepted') return;
 
           try {
-            const started = await chrome.runtime.sendMessage({
+            await chrome.runtime.sendMessage({
               type: 'START_BREAK',
               payload: { id },
             });
-            goTo = started?.data?.goTo;
           } catch {
             // No stored break, so no reminder and no observation — but the
             // break itself still happens, because leaving is what makes it one.
           }
 
-          leaveTheFeed(goTo);
+          leaveTheFeed();
         })();
       },
     });

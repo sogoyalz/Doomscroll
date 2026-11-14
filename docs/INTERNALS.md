@@ -1,5 +1,9 @@
 # Internals
 
+This document describes the original rules-based design. For the current optional
+trained model, human reviews, and release limitations, see [README.md](../README.md)
+and [architecture.md](architecture.md). Code snippets here are abbreviated.
+
 How the extension actually works, end to end: where every number comes from,
 what each decision is made of, and what the system can and cannot know.
 
@@ -117,8 +121,8 @@ Identity is resolved in three tiers:
 1. **React fiber shortcode.** `main-world.ts` caches the `__reactFiber$…`
    property key, then walks up to 30 `.return` hops looking for
    `memoizedProps.media.code`. Found, it writes the value to
-   `data-doomscroll-shortcode` on the container, plus
-   `data-doomscroll-shortcode-src` recording that it came from the fiber. The
+   `data-reel-code` on the container, plus
+   `data-reel-code-src` recording that it came from the fiber. The
    isolated world reads the attribute.
 2. **Derived key.** `authorHandle | video-basename`, from the author link and
    the `<video>` element's `currentSrc`.
@@ -251,7 +255,7 @@ async REEL_VIEW_LOGGED(payload, sender) {
   const settings = await getSettings();
   if (!settings.trackingEnabled) return { queued: false };
 
-  await recordReelView(payload, classifyReel(payload, settings.classificationMode));
+  await recordReelView(payload, await classifyReel(payload, settings.classificationMode));
 
   await markDayDirty(payload.startedAt);      // ← bookkeeping FIRST
   await scheduleAggregateFlush();
@@ -710,7 +714,7 @@ If tracking ever stops again, check in this order:
 ```bash
 document.querySelectorAll('div[aria-label="Video player"]').length
 document.querySelectorAll('a[aria-label$=" reels"]').length
-document.querySelectorAll('[data-doomscroll-shortcode]').length
+document.querySelectorAll('[data-reel-code]').length
 document.querySelector('video')?.currentSrc
 ```
 
@@ -720,9 +724,9 @@ single-reel permalink (`/reel/<code>/`) is a different layout from the feed
 
 ### Known benign races
 
-Documented in code rather than locked: concurrent tabs can split a session id,
-and the dirty-days read-modify-write can drop a day under heavy concurrency
-(recovered by the next write to that day).
+The worker serializes session assignment and history operations, including
+dirty-day updates. Pending deliveries are deduplicated by event ID. A page
+closing before both storage and message delivery complete can still lose a view.
 
 ---
 
@@ -731,15 +735,15 @@ and the dirty-days read-modify-write can drop a day under heavy concurrency
 **Can:**
 
 - Which reels you watched, for how long, in what order, grouped into sessions
-- What emotional or topical register each reel's *text* carries, at ~88%
-  accuracy on a 701-reel hand-labelled benchmark
+- Suggest emotional or topical labels from reel text; accuracy on a user's
+  feed requires an independent, representative labeled evaluation
 - Whether one charged register is dominating your recent window relative to
   your own trailing rate
 - The longest unbroken run of one register in a session
 - How your charged share is trending over 30 days, and which register is driving
   the change
 - Which creators you spend the most time on, and their charged share
-- Whether interrupting you changed anything
+- Recorded responses to interruptions; causal effectiveness remains unverified
 
 **Cannot:**
 

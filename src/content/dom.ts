@@ -12,14 +12,27 @@ export const AUTHOR_LINK_SELECTOR = 'a[aria-label$=" reels"]';
 
 // The MAIN-world bridge republishes the React fiber shortcode here, because
 // an isolated-world script cannot read page-set expando properties.
-export const SHORTCODE_ATTR = 'data-doomscroll-shortcode';
+export const SHORTCODE_ATTR = 'data-reel-code';
 
 // Which path produced the shortcode. The bridge is the most fragile thing in
 // the extension and it fails silently — a React internals rename just stops
 // resolving, and the derived `author|basename` fallback keeps tracking working
 // while quietly degrading identity. Publishing the source is what makes that
 // degradation countable instead of invisible.
-export const SHORTCODE_SRC_ATTR = 'data-doomscroll-shortcode-src';
+export const SHORTCODE_SRC_ATTR = 'data-reel-code-src';
+
+/**
+ * Instagram shortcodes are URL-safe base64, almost always 11 characters.
+ *
+ * The bridge copies `media.code` out of the page, and the page can also write
+ * the same attribute itself. Anything outside this shape is not an identity
+ * the extension should store or treat as fiber-derived.
+ */
+const PUBLISHED_SHORTCODE = /^[A-Za-z0-9_-]{6,32}$/;
+
+export function isPublishedShortcode(value: unknown): value is string {
+  return typeof value === 'string' && PUBLISHED_SHORTCODE.test(value);
+}
 
 export type ShortcodeSource = 'fiber' | 'fallback';
 
@@ -46,7 +59,7 @@ export type ShortcodeSource = 'fiber' | 'fallback';
  * one reel completing during ordinary hydration raised a permanent "Reels
  * aren't being identified reliably" alarm on a healthy feed.
  */
-export const BRIDGE_STATUS_ATTR = 'data-doomscroll-bridge';
+export const BRIDGE_STATUS_ATTR = 'data-reel-bridge';
 
 export type BridgeStatus = 'ok' | 'no-fiber' | 'no-code' | 'absent';
 
@@ -68,7 +81,7 @@ export function bridgeStatus(doc: Document = document): BridgeStatus {
  * Absent means paused until the isolated script has read the saved setting.
  * A saved pause must also be respected during page initialization.
  */
-export const TRACKING_ATTR = 'data-doomscroll-tracking';
+export const TRACKING_ATTR = 'data-reel-watch';
 
 export function trackingPaused(doc: Document = document): boolean {
   return (
@@ -98,9 +111,15 @@ const VIEWPORT_HEIGHT_TOLERANCE = 0.1;
  * assuming every container is a real reel.
  */
 export function findReelContainers(root: ParentNode = document): HTMLElement[] {
+  const players = [...root.querySelectorAll<HTMLElement>(VIDEO_PLAYER_SELECTOR)];
+  if (!players.length) return [];
+
+  // One parent walk for the whole screen. The old check ran querySelectorAll
+  // on every ancestor of every player, and each of those scans the feed.
+  const playerCount = countPlayersUnderAncestors(players);
   const containers = new Set<HTMLElement>();
-  for (const player of root.querySelectorAll<HTMLElement>(VIDEO_PLAYER_SELECTOR)) {
-    const container = cachedContainerForPlayer(player);
+  for (const player of players) {
+    const container = cachedContainerForPlayer(player, playerCount);
     if (container) containers.add(container);
   }
   return [...containers];
@@ -109,22 +128,35 @@ export function findReelContainers(root: ParentNode = document): HTMLElement[] {
 /**
  * Player-to-container resolution, memoised per player element.
  *
- * This runs on every animation frame while scrolling, and resolving a
- * container walks ancestors calling querySelectorAll on each — queries that
- * search the whole feed subtree, once per mounted player, per frame. The
- * mapping never changes for a given player, so it is cached and revalidated
- * with two O(1)-ish checks instead.
+ * The mapping does not change for a given player. Revalidated with two tree
+ * checks, no selector matching, so a stale entry cannot survive a re-render.
  */
 const containerByPlayer = new WeakMap<HTMLElement, HTMLElement>();
 
-function cachedContainerForPlayer(player: HTMLElement): HTMLElement | null {
+function countPlayersUnderAncestors(players: readonly HTMLElement[]): Map<HTMLElement, number> {
+  const counts = new Map<HTMLElement, number>();
+  for (const player of players) {
+    let node = player.parentElement;
+    for (let depth = 0; depth < MAX_ANCESTOR_WALK && node; depth++) {
+      if (node === document.body || node === document.documentElement) break;
+      counts.set(node, (counts.get(node) ?? 0) + 1);
+      node = node.parentElement;
+    }
+  }
+  return counts;
+}
+
+function cachedContainerForPlayer(
+  player: HTMLElement,
+  playerCount?: Map<HTMLElement, number>,
+): HTMLElement | null {
   const cached = containerByPlayer.get(player);
   // Revalidate rather than trust: the container must still be in the document
   // and still own this player. Both are cheap tree checks, no selector
   // matching, so a stale entry can never survive a re-render.
   if (cached && cached.isConnected && cached.contains(player)) return cached;
 
-  const resolved = containerForPlayer(player);
+  const resolved = resolveContainer(player, playerCount);
   if (resolved) containerByPlayer.set(player, resolved);
   return resolved;
 }
@@ -140,6 +172,19 @@ function cachedContainerForPlayer(player: HTMLElement): HTMLElement | null {
  * viewport-height, since each reel occupies about one screen.
  */
 export function containerForPlayer(player: HTMLElement): HTMLElement | null {
+  return resolveContainer(player);
+}
+
+/**
+ * Ancestors that still belong to this reel, then the one that should be tracked.
+ *
+ * `playerCount` comes from a single walk over every mounted player. Without
+ * it, each ancestor asks the DOM whether it holds a second player.
+ */
+function resolveContainer(
+  player: HTMLElement,
+  playerCount?: Map<HTMLElement, number>,
+): HTMLElement | null {
   // Collect the ancestors that could plausibly be this reel's container
   // before testing any of them, so both strategies search the same bounded
   // set and neither can escape into the page shell.
@@ -154,7 +199,10 @@ export function containerForPlayer(player: HTMLElement): HTMLElement | null {
     // A reel container holds exactly one player. Seeing a second means the
     // walk has left this reel and reached the feed that holds them all —
     // which is what happens when a reel's own author link is missing.
-    if (node.querySelectorAll(VIDEO_PLAYER_SELECTOR).length > 1) break;
+    const others = playerCount
+      ? (playerCount.get(node) ?? 0) > 1
+      : node.querySelectorAll(VIDEO_PLAYER_SELECTOR).length > 1;
+    if (others) break;
 
     candidates.push(node);
     node = node.parentElement;

@@ -1,16 +1,19 @@
 # Privacy Policy
 
-**Last updated:** 30 October 2026
+**Last updated:** 14 November 2026
 
 Doomscroll is a Chrome extension that tracks which Instagram Reels you watch
 and flags when the feed is serving you a repetitive stream of similar content.
+It is not affiliated with, endorsed by, or made by Instagram, Meta, or Google.
 
 ## The short version
 
 Everything stays on your computer. There is no server, no account, and no
-analytics. The extension makes no network requests of any kind — you can
-verify this yourself: there is not a single `fetch`, `XMLHttpRequest`,
-`WebSocket`, or `sendBeacon` call in the source.
+analytics. Reel text and reviews are never sent to a server. The optional trained
+model and its runtime are bundled with the extension; inference reads these
+local extension files. The developer build downloads pinned public model files
+from Hugging Face, but an installed extension does not download models or code.
+
 
 ## What is stored
 
@@ -28,6 +31,10 @@ Stored locally in your browser (IndexedDB and `chrome.storage.local`):
 | Interruption records (level, what prompted it, what you did about it, confirmed delivery and any request to end a break early) | So you can review intervention decisions and responses                              |
 | Whether the last save failed                                                                                                   | So the dashboard can say "reels aren't being saved" instead of showing an empty day |
 | Your settings                                                                                                                  | To remember your preferences                                                        |
+
+Human topic/tone reviews, model identifiers, and uncertainty/fallback status are
+stored with each reel and included in exports. Reviews are deleted with history
+and are not automatically used for training.
 
 **Creator handles are included.** They are stored alongside each reel for the
 per-creator breakdown, and when a reel's shortcode cannot be resolved the
@@ -48,6 +55,7 @@ exports.
 
 | Permission                   | Reason                                                                                                                                                                                                                                                                                                          |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `offscreen` | Run the bundled pretrained text model in a hidden extension document. No page capture, audio recording, or remote inference. |
 | `storage`                    | Save your settings and viewing history locally                                                                                                                                                                                                                                                                  |
 | `alarms`                     | Run daily maintenance (rolling up stats, deleting old data) — a Manifest V3 background worker is shut down when idle and cannot use timers for this                                                                                                                                                             |
 | `notifications` _(optional)_ | Show the gentlest break reminder. Requested only when you switch interventions on, never at install. Off by default, and unavailable until the extension has a week of your own history. Notifications are raised locally by the extension itself — nothing is pushed from a server, because there is no server |
@@ -71,10 +79,16 @@ end does not establish that scrolling stopped.
 - **Delete** — Settings → Delete history removes all tracked history
 - **Uninstalling** the extension removes everything, including settings
 
-## Sharing
+## Sharing and limited use
 
-Nothing is shared, sold, or transmitted. There is nobody to share it with:
-no backend exists.
+Nothing is sold, shared, or transmitted. There is no backend and no third
+party.
+
+The data listed above is used only to show you your own Reels history and to
+decide, on your device, whether the feed has become unusually repetitive.
+It is not sold. It is not used for advertising, credit, lending, or any
+purpose unrelated to that single feature. It is not transferred to anyone,
+except for a CSV you choose to export onto your own computer.
 
 ## Changes
 

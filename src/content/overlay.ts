@@ -16,7 +16,7 @@
 import { breakRemainingMs, type BreakState } from '@shared/break.js';
 import type { InterventionLevel } from '@shared/types.js';
 
-const HOST_ID = 'doomscroll-overlay';
+const HOST_ID = 'reel-interrupt';
 
 /**
  * How long the block level withholds its dismiss button.

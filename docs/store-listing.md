@@ -19,13 +19,14 @@ Each must match `manifest.json` exactly. Copy verbatim into the form.
 
 | Permission                  | Justification                                                                                                                                                                                                                                                                                                      |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `offscreen` | Runs the bundled pretrained text model in a hidden extension document. All inference is local; no screen or audio capture. |
 | `storage`                   | Saves the user's settings and their local viewing history. No data leaves the device.                                                                                                                                                                                                                              |
 | `alarms`                    | Runs daily maintenance — rolling up statistics and deleting history older than 90 days. A Manifest V3 service worker is terminated when idle and cannot use `setTimeout` for scheduled work, so alarms are the only mechanism available.                                                                           |
 | `notifications`             | Shows the gentlest of the three optional break reminders. Off by default and unavailable until the extension has a week of the user's own history to compare against; the user turns it on in the extension's settings and can turn it off there. No notification is ever sent from a server — there is no server. |
 | `https://*.instagram.com/*` | Reads the caption, hashtags, and audio name of the reel currently on screen in order to categorise it. This is the only site the extension runs on, and it is excluded from `/direct/` and `/accounts/`.                                                                                                           |
 
 **Remote code:** none. Everything executes from the packaged bundle; the
-extension makes no network requests of any kind.
+extension sends no reel data externally. Model weights and WASM execute from the package.
 
 **Data usage disclosures:** tick _Personally identifiable information_ — the
 fallback reel identifier includes the creator's Instagram handle. Then certify
@@ -34,44 +35,70 @@ determine creditworthiness. All true; nothing is transmitted anywhere.
 
 ## Listing copy
 
+Paste this into the form. Do not add superlatives, health claims, or a claim
+that the extension is official.
+
 **Name:** Doomscroll
 
-**Short description** (132 char limit):
+The name does not include "Instagram", "Google", or "Chrome". That is
+deliberate. Store names that imply the product is made by the site it runs on
+are rejected.
 
-> See how much you scroll Reels, and get told when the feed keeps serving you
-> the same kind of content. Fully private.
+**Short description** (132 characters maximum):
+
+> Tracks your Instagram Reels watch time and tells you when the feed keeps repeating one kind of content. Stays on your device.
 
 **Detailed description:**
 
-> Doomscroll answers two questions about your Instagram Reels habit: how much
-> are you watching, and what does the feed keep showing you?
+> Doomscroll records which Instagram Reels you watch and how long each one stays on screen. It groups them into 21 text-based categories and shows the mix.
 >
-> It tracks watch time, reel count, scroll pace, and your longest unbroken
-> stretch. It reads each reel's caption, hashtags, and audio name to sort it
-> into one of twenty-one categories, and shows the mix.
+> It also watches for a run of one category that is unusual compared with your own recent history. It needs about a week of that history before it will say so, and it says when it is still learning. Interruptions are off until you turn them on.
 >
-> The part that matters: it watches for the feed locking onto one category and
-> serving it back. That judgement is made against YOUR OWN normal, not a fixed
-> rule — being shown a lot of sad content is only flagged if it is unusual for
-> you. It needs about a week of history before it can say anything, and it
-> tells you so rather than guessing.
+> Nothing is sent anywhere. There is no account, no server, and no analytics. The extension does not run on Instagram direct messages or account settings, and it does not read your login or cookies.
 >
-> WHAT IT DOES NOT DO
-> • No account, no server, no analytics — it makes no network requests at all
-> • Does not run on direct messages or account settings
-> • Does not read your login, cookies, or anything outside instagram.com
-> • Interruptions are off by default and stay off until you switch them on
+> You can pause tracking, export your history as CSV, or delete it. Raw reel history is removed after 90 days.
 >
-> Pause tracking at any time from the popup. Export or delete your data
-> whenever you like.
+> The categories describe the reel's text, not your mood. A reel with no usable text signal is left uncategorised.
 >
-> A note on what this can and cannot tell you: it detects repetition in a
-> content category derived from text. It is not a read on your mood. Text is
-> the only signal available, so reels with no caption cannot be categorised at
-> all, and those are shown honestly rather than counted as neutral.
+> Doomscroll is not affiliated with, endorsed by, or made by Instagram, Meta, or Google.
 
 **Category:** Productivity
 **Language:** English
+
+**Privacy policy URL**, entered exactly:
+
+`https://sogoyalz.github.io/Doomscroll/PRIVACY`
+
+## What to do when you submit
+
+1. Build the upload with `npm run package`. Upload `doomscroll-1.1.0.zip` only.
+   Do not upload the repository folder or `dist/` by hand.
+2. Paste the single purpose, the permission justifications, and the listing
+   copy from this file.
+3. Under privacy practices, disclose that the extension handles personally
+   identifiable information, because a saved reel can include a creator handle
+   and caption. Then certify all three statements: the data is not sold, it is
+   not used for purposes unrelated to the extension's single purpose, and it is
+   not used to determine creditworthiness.
+4. Attach `store-assets/dashboard-demo.png` and `store-assets/settings-demo.png`.
+   Both are 1280×800. Both use synthetic demonstration data. If the form has a
+   caption field, say so.
+5. Attach `assets/icons/icon128.png` where the form asks for the store icon.
+6. Publish the privacy policy at the URL above before you submit. The page
+   must match `PRIVACY.md`.
+7. After approval, every later upload needs a higher version in both
+   `manifest.json` and `package.json`.
+
+## What not to do
+
+- Do not write that Doomscroll is an official Instagram, Meta, or Google product.
+- Do not use the Instagram, Meta, or Google logos, or a screenshot of a real person's feed, messages, or account.
+- Do not write "fully private", "100% accurate", "stops doomscrolling", or any claim about mood, health, or medical benefit. The extension stores captions and handles on the device. It does not read emotion.
+- Do not add permissions, analytics, a backend, or code loaded from the network. The package check rejects a network call and any permission the listing does not already justify. Change the listing and `PRIVACY.md` first if the product ever changes.
+- Do not include source maps, `node_modules`, test output, `.env` files, or a CSV export in the zip.
+- Do not tick a box that says live testing or a public beta has passed. Those gates are still open and are not part of this listing.
+- Do not keyword-stuff the description with unrelated search terms.
+- The Chrome Web Store developer registration fee is paid in your own Google account, on Google's site, by you. This repository cannot do that step.
 
 ## Assets needed
 
@@ -82,33 +109,21 @@ determine creditworthiness. All true; nothing is transmitted anywhere.
 | Small promo tile   | 440×280                                       | optional                                                                                               |
 | Privacy policy URL | publicly reachable                            | `https://sogoyalz.github.io/Doomscroll/PRIVACY`                                                        |
 
-Suggested screenshots, in order: the popup with a populated day; the category
-mix with a clear dominant category; the options detection log; the "why so
-much neutral" tuning report.
+The two screenshots above are the ones to upload. Do not add a capture of a
+real account.
 
-Use a clearly disclosed demonstration account or consented, redacted data.
-Never expose a tester’s viewing history, handles, or personal messages in public assets.
+## Still yours to finish
 
-## Before submitting
+An archive is not approval. [release-readiness.md](release-readiness.md)
+still has open live and beta gates. Do not describe those as passed in the
+store form.
 
-Complete every gate in [release-readiness.md](release-readiness.md), including
-live extraction validation and the opt-in beta. An archive building successfully
-is not evidence that these gates passed.
+- [x] Privacy policy text is in `PRIVACY.md`, including the limited-use statement the form asks you to certify.
+- [x] Version `1.1.0` matches in `manifest.json` and `package.json`.
+- [x] `npm run package` checks that the zip's permissions match the source, that source code does not send network requests (bundled model/runtime files are read locally), and that Direct and Accounts stay excluded.
+- [ ] You upload `doomscroll-1.1.0.zip` and pay or confirm the developer registration in your own Google account.
+- [ ] You host the current `PRIVACY.md` at the privacy policy URL before submitting.
 
-- [x] Host `PRIVACY.md` at a public URL:
-      `https://sogoyalz.github.io/Doomscroll/PRIVACY`.
-- [x] Set the release version in `manifest.json`. It must increase on every
-      subsequent upload.
-- [ ] `npm run package`, then upload `doomscroll-<version>.zip`.
-- [ ] Verify the built manifest declares no permission the code does not use.
-      `npm run package` checks structure but not this — read it.
-- [ ] Test the packaged zip in a clean Chrome profile, not just the unpacked
-      `dist/`, and confirm it works on a Chrome at the declared minimum (116).
-- [ ] Have the developer account's one-time fee paid and identity verified.
-
-## Expect
-
-First review typically takes a few days. Extensions requesting host
-permissions for a major site draw more scrutiny than average — the narrow
-single purpose, the absence of any network code, and the `/direct/` exclusion
-are the three things most worth pointing at if a reviewer asks.
+Review usually takes a few days. A reviewer who asks about Instagram access
+should be pointed at the single purpose, the lack of any network request, and
+the exclusion of `/direct/` and `/accounts/`.

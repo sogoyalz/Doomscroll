@@ -23,7 +23,9 @@
 body {
   width: 348px;
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(223, 174, 66, 0.16), transparent 42%),
+    var(--bg);
   color: var(--text);
   font:
     13px/1.5 -apple-system,
@@ -109,7 +111,37 @@ body {
 /* ── hero ───────────────────────────────────────────────── */
 
 .hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 18px 16px 16px;
+}
+
+.hero-value {
+  animation: rise 0.55s ease both;
+}
+
+.ring {
+  width: 72px;
+  height: 72px;
+  flex: none;
+}
+
+.ring-track,
+.ring-seg {
+  fill: none;
+  stroke-width: 7;
+}
+
+.ring-track {
+  stroke: #2a2a31;
+}
+
+.ring-seg {
+  transform: rotate(-90deg);
+  transform-origin: 34px 34px;
+  animation: fade 0.7s ease both;
 }
 
 .hero-value {
@@ -155,6 +187,8 @@ body {
 .mix-seg {
   border-radius: 1.5px;
   min-width: 2px;
+  transform-origin: left center;
+  animation: grow 0.65s ease both;
 }
 
 .mix-seg.is-empty {
@@ -345,6 +379,9 @@ body {
   stroke-width: 1.6;
   stroke-linejoin: round;
   stroke-linecap: round;
+  stroke-dasharray: 480;
+  stroke-dashoffset: 480;
+  animation: draw 1s ease forwards;
 }
 /* The period's own average, for the line to be read against. Dashed and faint
    so it reads as a reference rather than a second series. */
@@ -392,6 +429,45 @@ body {
 .tab:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-value,
+  .ring-seg,
+  .mix-seg,
+  .trend-line {
+    animation: none;
+    opacity: 1;
+  }
+
+  .trend-line {
+    stroke-dashoffset: 0;
+  }
 }
 
 .action-error {

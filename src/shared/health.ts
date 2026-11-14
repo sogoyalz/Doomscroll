@@ -151,12 +151,9 @@ function emptyHealth(): ExtractionHealth {
  * kept as a list, so this stays a single small record no matter how much the
  * user scrolls, and recovers quickly once a broken selector is fixed.
  *
- * Called from the content script, which makes it the one write outside the
- * service worker's ownership of storage — see the note at the top of
- * background/index.ts. Read-modify-write on a shared key, so two tabs
- * scrolling at once can drop a sample. Deliberately not locked: every number
- * here is read as a ratio against `samples`, and a dropped update loses the
- * numerator and the denominator together, so the rate it reports is unmoved.
+ * Called from the service worker, on the history queue, so two tabs cannot
+ * interleave the read and the write. A dropped update used to lose the
+ * numerator and the denominator together.
  */
 export async function recordExtraction(outcome: {
   hasAuthor: boolean;

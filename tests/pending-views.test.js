@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  clampNewReelEvent,
   keepPendingView,
   readPendingViews,
   clearPendingViews,
@@ -62,6 +63,22 @@ describe('durable pending views', () => {
     await clearPendingViews();
     expect(store).toEqual({ 'doomscroll:settings': { trackingEnabled: true } });
   });
+  it('keeps an oversized page-controlled field by truncating it', () => {
+    const stored = clampNewReelEvent({
+      ...view(),
+      reelShortcode: 'x'.repeat(3000),
+      captionText: 'c'.repeat(40_000),
+      audioName: 'a'.repeat(5000),
+      authorHandle: 'h'.repeat(400),
+      hashtags: ['#'.repeat(600), 'ok'],
+    });
+    expect(isNewReelEvent(stored)).toBe(true);
+    expect(stored.reelShortcode).toHaveLength(2048);
+    expect(stored.captionText).toHaveLength(30_000);
+    expect(stored.authorHandle).toHaveLength(256);
+    expect(stored.hashtags[0]).toHaveLength(512);
+  });
+
   it.each([
     { watchDurationMs: NaN },
     { watchDurationMs: -1 },

@@ -102,6 +102,17 @@ describe('runDetection', () => {
     expect(entry.ratio).toBeGreaterThan(1);
   });
 
+  it('counts a streak that runs past the dominance window', async () => {
+    // The window is 15. Stopping there would report 15 for a run of 20 and
+    // the block threshold, which sits above the window, would never be reached.
+    await seedBaseline({ joyful: 40, sad: 8 });
+    await seedRecentReels('sad', 20);
+
+    const detection = await runDetection('session-1', DEFAULT_SETTINGS, NOW);
+
+    expect(detection.streak).toBe(20);
+  });
+
   it('records wouldHaveActed as false while intervention is off', async () => {
     // The default. Log-only means the decision is recorded and nothing else.
     await seedBaseline({ joyful: 40, sad: 8 });

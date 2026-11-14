@@ -120,6 +120,14 @@ describe('shortcodeFromFiber', () => {
 });
 
 describe('tagContainers republishes the shortcode', () => {
+  it('does not publish a value that is not an Instagram shortcode', () => {
+    const el = container({ code: '=HYPERLINK("http://evil")' });
+    mw.tagContainers();
+    expect(el.getAttribute(SHORTCODE_ATTR)).toBe(null);
+    expect(el.hasAttribute(SHORTCODE_SRC_ATTR)).toBe(false);
+    expect(status()).toBe('no-code');
+  });
+
   it('writes the code and marks it fiber-derived', () => {
     const el = container({ code: 'Dbv6giIR-kt' });
     mw.tagContainers();

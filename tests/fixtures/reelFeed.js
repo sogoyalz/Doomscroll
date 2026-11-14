@@ -90,7 +90,9 @@ function videoBlock(reel) {
 }
 
 function reelBlock(reel) {
-  const shortcodeAttr = reel.shortcode ? ` data-doomscroll-shortcode="${reel.shortcode}"` : '';
+  const shortcodeAttr = reel.shortcode
+    ? ` data-reel-code="${reel.shortcode}" data-reel-code-src="fiber"`
+    : '';
   return `
     <div class="x5yr21d x1n2onr6 xh8yej3"${shortcodeAttr}>
       <div aria-label="Video player"
@@ -162,7 +164,7 @@ export function mountFeed(doc = document, win = window) {
   });
 
   const containers = [
-    ...doc.querySelectorAll('[data-doomscroll-shortcode], #scroll-container > div'),
+    ...doc.querySelectorAll('[data-reel-code], #scroll-container > div'),
   ];
 
   let offset = 0;

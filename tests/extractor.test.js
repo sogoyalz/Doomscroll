@@ -10,9 +10,10 @@ import {
   isSameReel,
   isUnidentified,
   mergeExtractions,
+  snapshotSettled,
   UNIDENTIFIED_IDENTITY,
 } from '../src/content/extractor.ts';
-import { SHORTCODE_ATTR } from '../src/content/dom.ts';
+import { SHORTCODE_ATTR, SHORTCODE_SRC_ATTR } from '../src/content/dom.ts';
 
 // Markup mirrors docs/dom-notes.md: aria-label / dir / href-prefix anchors
 // only, with Meta's generated class names deliberately omitted since nothing
@@ -57,7 +58,10 @@ function buildContainer({
     container.appendChild(link);
   }
 
-  if (shortcode !== null) container.setAttribute(SHORTCODE_ATTR, shortcode);
+  if (shortcode !== null) {
+    container.setAttribute(SHORTCODE_ATTR, shortcode);
+    container.setAttribute(SHORTCODE_SRC_ATTR, 'fiber');
+  }
 
   if (videoSrc !== null) {
     const video = document.createElement('video');
@@ -296,6 +300,7 @@ describe('isSameReel', () => {
     container.querySelector('video').setAttribute('src', '/new.mp4');
     container.querySelector('div[dir="auto"]').textContent = 'new caption';
     container.setAttribute(SHORTCODE_ATTR, 'NEW_REEL');
+    container.setAttribute(SHORTCODE_SRC_ATTR, 'fiber');
     const after = extractReel(container);
 
     expect(isSameReel(before, after)).toBe(false);
@@ -309,6 +314,7 @@ describe('isSameReel', () => {
     const before = extractReel(container);
     container.querySelector('video').setAttribute('src', '/video.mp4?token=new');
     container.setAttribute(SHORTCODE_ATTR, 'SAME_REEL');
+    container.setAttribute(SHORTCODE_SRC_ATTR, 'fiber');
     const after = extractReel(container);
 
     expect(isSameReel(before, after)).toBe(true);
@@ -358,6 +364,52 @@ describe('audio extraction fallbacks', () => {
 
   it('returns null when there is no audio anywhere', () => {
     expect(extractAudioName(buildContainer())).toBeNull();
+  });
+});
+
+describe('snapshotSettled', () => {
+  it('leaves a fully tagged reel alone', () => {
+    const container = buildContainer({
+      shortcode: 'Dbv6giIR-kt',
+      caption: 'hello',
+      videoSrc: 'https://cdn/video.mp4',
+    });
+    expect(snapshotSettled(extractReel(container), container)).toBe(true);
+  });
+
+  it('keeps reading when an audio credit appears after the caption', () => {
+    const container = buildContainer({
+      shortcode: 'Dbv6giIR-kt',
+      caption: 'hello',
+      videoSrc: 'https://cdn/video.mp4',
+    });
+    const snapshot = extractReel(container);
+    const link = document.createElement('a');
+    link.setAttribute('href', '/reels/audio/99/');
+    const span = document.createElement('span');
+    span.setAttribute('dir', 'auto');
+    span.textContent = 'Artist · Track';
+    link.append(span);
+    container.append(link);
+
+    expect(snapshot.audioName).toBeNull();
+    expect(snapshotSettled(snapshot, container)).toBe(false);
+  });
+
+  it('keeps reading until the bridge publishes a shortcode', () => {
+    const container = buildContainer({ caption: 'hello', videoSrc: 'https://cdn/video.mp4' });
+    expect(snapshotSettled(extractReel(container), container)).toBe(false);
+  });
+
+  it('reads again when the container is recycled onto another reel', () => {
+    const container = buildContainer({
+      shortcode: 'Dbv6giIR-kt',
+      caption: 'hello',
+      videoSrc: 'https://cdn/video.mp4',
+    });
+    const snapshot = extractReel(container);
+    container.setAttribute(SHORTCODE_ATTR, 'OTHERCODE1');
+    expect(snapshotSettled(snapshot, container)).toBe(false);
   });
 });
 
@@ -552,6 +604,21 @@ describe('recycling vs late shortcode tagging', () => {
 });
 
 describe('shortcodeSource', () => {
+  it('ignores a shortcode the page set without the bridge marker', () => {
+    const container = buildContainer({ shortcode: 'Dbv6giIR-kt' });
+    container.removeAttribute(SHORTCODE_SRC_ATTR);
+    const reel = extractReel(container);
+    expect(reel.shortcode).toBeNull();
+    expect(reel.shortcodeSource).toBe('fallback');
+  });
+
+  it('ignores a value that is not an Instagram shortcode', () => {
+    const container = buildContainer({ shortcode: '=HYPERLINK("http://evil")' });
+    const reel = extractReel(container);
+    expect(reel.shortcode).toBeNull();
+    expect(reel.identity).not.toContain('HYPERLINK');
+  });
+
   it('reports fiber when the MAIN-world bridge tagged the container', () => {
     expect(extractReel(buildContainer({ shortcode: 'Dbv6giIR-kt' })).shortcodeSource).toBe(
       'fiber',

@@ -17,6 +17,7 @@
 import {
   BRIDGE_STATUS_ATTR,
   findReelContainers,
+  isPublishedShortcode,
   SHORTCODE_ATTR,
   SHORTCODE_SRC_ATTR,
   trackingPaused,
@@ -98,7 +99,10 @@ function readFiber(el: HTMLElement): { code: string | null; hasFiber: boolean } 
       visited.add(node);
       const code =
         node.memoizedProps?.media?.code ?? shortcodeFromMediaId(node.memoizedProps?.mediaId);
-      if (typeof code === 'string' && code) return { code, hasFiber: true };
+      // media.code is page-controlled. A value that is not a shortcode must
+      // not be written into the DOM, where the isolated world would store it
+      // as the reel's identity.
+      if (isPublishedShortcode(code)) return { code, hasFiber: true };
       node = node.return;
     }
   }

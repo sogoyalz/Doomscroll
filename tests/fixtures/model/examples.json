@@ -1,0 +1,14 @@
+[
+  {"captionText":"Trying on three different dresses for tonight", "topic":"fashion", "tone":null},
+  {"captionText":"Playing the violin on stage with the orchestra", "topic":"music", "tone":null},
+  {"captionText":"Whisk the eggs and flour, then bake for twenty minutes", "topic":"food", "tone":null},
+  {"captionText":"Our golden retriever learned to fetch the newspaper", "topic":"pets", "tone":null},
+  {"captionText":"Exploring the ancient temples in Kyoto on our holiday", "topic":"travel", "tone":null},
+  {"captionText":"Painting a watercolor portrait of my sister", "topic":"art", "tone":null},
+  {"captionText":"The striker scores in the final minute of the match", "topic":"sports", "tone":null},
+  {"captionText":"Installing a new graphics card in my computer", "topic":"tech", "tone":null},
+  {"captionText":"My boyfriend proposed and I want to spend my life with him", "topic":null, "tone":"romantic"},
+  {"captionText":"I cannot stop worrying about what might go wrong tomorrow", "topic":null, "tone":"anxious"},
+  {"captionText":"We broke up yesterday and I still cannot let go", "topic":null, "tone":"breakup"},
+  {"captionText":"Keep working hard and never give up on your dreams", "topic":null, "tone":"motivational"}
+]

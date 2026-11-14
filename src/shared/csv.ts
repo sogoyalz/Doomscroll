@@ -51,6 +51,17 @@ const REEL_EVENT_HEADER = [
   'category',
   'categoryConfidence',
   'subtags',
+  'reviewTopic',
+  'reviewTone',
+  'predictedTopic',
+  'predictedTone',
+  'reviewVersion',
+  'reviewedAt',
+  'modelTopic',
+  'modelTone',
+  'classificationEngine',
+  'classificationStatus',
+  'reviewEngine',
 ];
 
 /**
@@ -77,6 +88,17 @@ export function reelEventsToCSV(events: ReelEvent[]): string {
     e.category ?? '',
     e.categoryConfidence ?? '',
     e.subtags.join(' '),
+    e.review?.topic ?? '',
+    e.review?.tone ?? '',
+    e.review?.predictedTopic ?? '',
+    e.review?.predictedTone ?? '',
+    e.review?.version ?? '',
+    e.review ? isoOrEmpty(e.review.reviewedAt) : '',
+    e.classificationDetails?.topic ?? '',
+    e.classificationDetails?.tone ?? '',
+    e.classificationDetails?.engine ?? 'local-rules',
+    e.classificationDetails?.status ?? '',
+    e.review?.engine ?? '',
   ]);
   return toCSV(REEL_EVENT_HEADER, rows);
 }

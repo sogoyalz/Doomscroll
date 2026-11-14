@@ -70,6 +70,28 @@ function sameOutcome(previous: DetectionLogEntry, next: PatternDetection, sessio
 const LONG_BASELINE_DAYS = 60;
 
 /**
+ * The streak already counted inside the loaded window, extended only when
+ * that window could not see the end of the run.
+ *
+ * Most reels are not part of a run longer than the window. Walking the rest
+ * of the session for those was a second IndexedDB cursor on every save.
+ */
+async function resolveStreak(
+  sessionId: string,
+  category: string | null,
+  windowStreak: number,
+  recent: ReelEvent[],
+  limit: number,
+): Promise<number> {
+  if (!category) return 0;
+  if (recent.length < limit) return windowStreak;
+  for (const event of recent) {
+    if (event.category !== null && event.category !== category) return windowStreak;
+  }
+  return getSessionStreak(sessionId, category);
+}
+
+/**
  * Scrolling pace across the window, in reels per second.
  *
  * Measured from the events already in hand rather than from the day's
@@ -106,8 +128,6 @@ export async function runDetection(
   now: number = Date.now(),
   record = true,
 ): Promise<PatternDetection> {
-  const recent = await getRecentSessionEvents(sessionId, settings.patternWindowSize);
-
   // Baseline excludes today: the session being judged must not be allowed to
   // raise the bar it is judged against. Yesterday backwards.
   //
@@ -118,7 +138,12 @@ export async function runDetection(
   const longFrom = localDateKey(startOfLocalDayBefore(now, LONG_BASELINE_DAYS));
   const shortFrom = localDateKey(startOfLocalDayBefore(now, BASELINE_WINDOW_DAYS));
 
-  const longDays = await getDailyAggregates(longFrom, to);
+  // The window and the baseline are independent reads. Waiting for one before
+  // starting the other made every reel pay two database round trips in a row.
+  const [recent, longDays] = await Promise.all([
+    getRecentSessionEvents(sessionId, settings.patternWindowSize),
+    getDailyAggregates(longFrom, to),
+  ]);
   const baselineDays = longDays.filter((d) => d.date >= shortFrom);
 
   const detection = detectPattern(
@@ -132,9 +157,13 @@ export async function runDetection(
     },
     now,
   );
-  detection.streak = detection.category
-    ? await getSessionStreak(sessionId, detection.category)
-    : 0;
+  detection.streak = await resolveStreak(
+    sessionId,
+    detection.category,
+    detection.streak,
+    recent,
+    settings.patternWindowSize,
+  );
 
   // A live retry can reconsider delivery without counting another view.
   if (!record) return detection;

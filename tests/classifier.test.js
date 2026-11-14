@@ -366,4 +366,43 @@ describe('the general vocabulary applies to hashtags, not just the curated list'
     const result = classify(input({ captionText: 'miss you ❤️' }));
     expect(result.category).not.toBe('neutral');
   });
+
+  it('does not let decorative hearts turn a music caption romantic', () => {
+    expect(
+      classify(
+        input({
+          captionText: 'acoustic cover ❤️❤️',
+          hashtags: ['cover'],
+          audioName: 'Some Artist · Love You',
+        }),
+      ).category,
+    ).toBe('music');
+  });
+
+  it('does not let a romantic song title replace a clothing caption', () => {
+    expect(
+      classify(
+        input({
+          captionText: 'outfit of the day, this lehenga',
+          hashtags: ['ootd'],
+          audioName: 'Arijit Singh · Pyaar Mohabbat Ishq',
+        }),
+      ).category,
+    ).toBe('fashion');
+  });
+
+  it('still reads a caption that is only a heart as romantic', () => {
+    expect(classify(input({ captionText: '❤️' })).category).toBe('romantic');
+  });
+
+  it('still uses the song title when the caption names no category', () => {
+    expect(
+      classify(
+        input({
+          captionText: 'posted just now',
+          audioName: 'Some Artist · Breakup Song heartbreak',
+        }),
+      ).category,
+    ).toBe('breakup');
+  });
 });

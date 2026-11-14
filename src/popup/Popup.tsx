@@ -19,6 +19,7 @@ import {
 } from '@shared/insights.js';
 import { TrendChart } from './TrendChart.js';
 import {
+  isAudioDark,
   isDrifting,
   isShortcodeDegraded,
   readHealth,
@@ -99,6 +100,40 @@ function heroParts(ms: number): { value: string; unit: string }[] {
       const match = /^(\d+)(\D+)$/.exec(part);
       return match ? { value: match[1]!, unit: match[2]! } : { value: part, unit: '' };
     });
+}
+
+/** Flat 2D ring of the same category mix as the bar below it. */
+function MixRing({ slices }: { slices: Slice[] }) {
+  const radius = 26;
+  const circumference = 2 * Math.PI * radius;
+  let cursor = 0;
+  return (
+    <svg className="ring" viewBox="0 0 68 68" aria-hidden="true">
+      <circle className="ring-track" cx="34" cy="34" r={radius} />
+      {slices.map((slice) => {
+        const length = Math.max(slice.share * circumference, 0);
+        const dash = `${length} ${circumference - length}`;
+        const node = (
+          <circle
+            key={slice.category}
+            className="ring-seg"
+            cx="34"
+            cy="34"
+            r={radius}
+            stroke={
+              slice.category === UNCLASSIFIED
+                ? UNCLASSIFIED_COLOR
+                : colorForCategory(slice.category)
+            }
+            strokeDasharray={dash}
+            strokeDashoffset={-cursor}
+          />
+        );
+        cursor += length;
+        return node;
+      })}
+    </svg>
+  );
 }
 
 /** Days of history the trend is drawn over. */
@@ -214,7 +249,9 @@ export function Popup() {
   // Two different breakages, one banner: from the popup's point of view both
   // mean "the numbers below are unreliable, go read Settings". Which one it is
   // matters when fixing it, and that detail lives in the Options alerts.
-  const degraded = health ? isDrifting(health) || isShortcodeDegraded(health) : false;
+  const degraded = health
+    ? isDrifting(health) || isShortcodeDegraded(health) || isAudioDark(health)
+    : false;
 
   // Drawn from the 30-day history regardless of the selected range: a trend
   // needs more days than "today" has, and the point of it is the slow drift
@@ -272,21 +309,24 @@ export function Popup() {
       ) : (
         <>
           <section className="hero">
-            <div className="hero-value">
-              {heroParts(totals.minutes * 60_000).map((part, i) => (
-                <span key={i}>
-                  {part.value}
-                  <span className="unit">{part.unit}</span>
-                </span>
-              ))}
+            <div>
+              <div className="hero-value">
+                {heroParts(totals.minutes * 60_000).map((part, i) => (
+                  <span key={i}>
+                    {part.value}
+                    <span className="unit">{part.unit}</span>
+                  </span>
+                ))}
+              </div>
+              <div className="hero-meta">
+                <span>{totals.reels} reels</span>
+                <span className="sep">·</span>
+                <span>{formatPace(totals.pace)}</span>
+                <span className="sep">·</span>
+                <span>{formatDuration(totals.longestBingeMs)} longest run</span>
+              </div>
             </div>
-            <div className="hero-meta">
-              <span>{totals.reels} reels</span>
-              <span className="sep">·</span>
-              <span>{formatPace(totals.pace)}</span>
-              <span className="sep">·</span>
-              <span>{formatDuration(totals.longestBingeMs)} longest run</span>
-            </div>
+            <MixRing slices={totals.slices} />
           </section>
 
           <section className="mix">

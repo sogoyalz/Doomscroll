@@ -28,7 +28,7 @@ import { CHARGED_CATEGORIES, TOPIC_CATEGORIES, type Category } from './taxonomy.
  * applies to hashtags, so terms that previously scored nothing when written
  * with a '#' are readable in history too.
  */
-export const LEXICON_VERSION = 5;
+export const LEXICON_VERSION = 7;
 
 export type ClassifiableCategory = Exclude<Category, 'neutral'>;
 
@@ -725,6 +725,12 @@ const TOPICS: Record<(typeof TOPIC_CATEGORIES)[number], CategoryLexicon> = {
     words: [
       'fashion',
       'outfit',
+      'outfits',
+      'clothing',
+      'clothes',
+      'dress',
+      'jeans',
+      'sneakers',
       'ootd',
       'style',
       'styling',

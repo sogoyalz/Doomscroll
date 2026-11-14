@@ -1,18 +1,13 @@
+import { validateReview } from '@shared/review.js';
 // Service worker — message router and scheduled maintenance.
 //
 // Never touches the page. Owns every write to tracked HISTORY, so concurrent
 // tabs cannot race each other over it: content scripts only report what they
 // saw and this decides what to keep.
 //
-// One deliberate exception, and it is worth naming rather than leaving the
-// sentence above quietly untrue. shared/health.ts writes its rolling
-// extraction counters from the content script, because they describe what
-// that page managed to read and are folded in per reel. That write is a
-// read-modify-write on a shared chrome.storage key, so two tabs scrolling at
-// once can drop a sample. Tolerated: the counters are only ever read as a
-// ratio against `samples`, both sides of which are lost together, so a
-// dropped update moves no rate. Nothing that is kept as history goes that
-// way.
+// Extraction counters are reported by content scripts and folded in here, on
+// the same queue as history, so two tabs cannot drop a sample by writing the
+// shared key at the same time.
 //
 // MV3 service workers are killed after ~30s idle, so nothing may be held in
 // module scope across events. Anything periodic runs off chrome.alarms, which
@@ -20,6 +15,7 @@
 
 import {
   clearAllData,
+  putReelEvents,
   getAllReelEvents,
   getReelEvent,
   getDailyAggregates,
@@ -46,6 +42,7 @@ import { beginBreak, endBreak, maybeIntervene, recordOutcome } from './intervene
 import { reclassifyIfLexiconChanged } from './reclassify.js';
 import { getSettings, updateSettings } from '@shared/settings.js';
 import { noteStorageFailure, noteStorageWorking } from '@shared/storage-health.js';
+import { recordExtraction } from '@shared/health.js';
 import { detectionLogToCSV, interventionLogToCSV, reelEventsToCSV } from '@shared/csv.js';
 import { buildTuningReport } from '@shared/tuning.js';
 import { authorBreakdown, summarizeSession } from '@shared/insights.js';
@@ -119,8 +116,8 @@ const handlers: HandlerMap = {
       return { queued: false };
     }
 
-    // Classified before the write: the rules engine is pure and synchronous,
-    // so there is no reason to store an unlabelled event and revisit it.
+    // Classify before committing the event. The local model is asynchronous;
+    // pending-view recovery preserves the input if this worker is stopped.
     //
     // A failure here is the one the user cannot otherwise see. Everything
     // downstream is skipped, correctly — there is nothing to aggregate — but
@@ -144,7 +141,16 @@ const handlers: HandlerMap = {
         ),
       };
     }
-    const classification = classifyReel(payload, settings.classificationMode);
+    const classification = previous
+      ? previous.category === null
+        ? null
+        : {
+            category: previous.category,
+            confidence: previous.categoryConfidence ?? 0,
+            subtags: previous.subtags,
+            details: previous.classificationDetails,
+          }
+      : await classifyReel(payload, settings.classificationMode);
 
     let inserted: boolean;
     try {
@@ -199,6 +205,27 @@ const handlers: HandlerMap = {
     }
 
     return { queued: true };
+  },
+
+  async EXTRACTION_OBSERVED(payload) {
+    const bridge = payload?.bridgeStatus;
+    if (
+      typeof payload?.hasAuthor !== 'boolean' ||
+      typeof payload?.hasText !== 'boolean' ||
+      typeof payload?.hasAudio !== 'boolean' ||
+      typeof payload?.fromFiber !== 'boolean' ||
+      (payload.audioChannel != null && typeof payload.audioChannel !== 'string') ||
+      (bridge !== 'ok' &&
+        bridge !== 'no-fiber' &&
+        bridge !== 'no-code' &&
+        bridge !== 'absent') ||
+      typeof payload.now !== 'number' ||
+      !Number.isFinite(payload.now)
+    ) {
+      throw new Error('Invalid extraction sample');
+    }
+    await recordExtraction(payload);
+    return { ok: true as const };
   },
 
   async GET_STATS({ range }) {
@@ -293,6 +320,14 @@ const handlers: HandlerMap = {
     );
   },
 
+  async REVIEW_REEL(payload) {
+    const event = await getReelEvent(payload?.id);
+    if (!event) throw new Error('Reel no longer exists');
+    const updated = { ...event, review: validateReview(event, payload) };
+    await putReelEvents([updated]);
+    return updated;
+  },
+
   async GET_SESSION_REELS({ sessionId }) {
     return getSessionEvents(sessionId);
   },
@@ -357,6 +392,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
     'GET_SETTINGS',
     'GET_SESSION_ID',
     'REEL_VIEW_LOGGED',
+    'EXTRACTION_OBSERVED',
     'INTERVENTION_DISMISSED',
     'START_BREAK',
     'END_BREAK',

@@ -7,6 +7,9 @@ import {
   findReelContainers,
   findScrollContainer,
   AUTHOR_LINK_SELECTOR,
+  SHORTCODE_ATTR,
+  SHORTCODE_SRC_ATTR,
+  TRACKING_ATTR,
   VIDEO_PLAYER_SELECTOR,
 } from '../src/content/dom.ts';
 import { extractReel } from '../src/content/extractor.ts';
@@ -16,6 +19,14 @@ let feed;
 
 beforeEach(() => {
   feed = mountFeed();
+});
+
+describe('page markers', () => {
+  it('does not put the product name on the page', () => {
+    for (const name of [SHORTCODE_ATTR, SHORTCODE_SRC_ATTR, BRIDGE_STATUS_ATTR, TRACKING_ATTR]) {
+      expect(name.toLowerCase()).not.toContain('doomscroll');
+    }
+  });
 });
 
 describe('findReelContainers', () => {
@@ -256,7 +267,7 @@ describe('end-to-end extraction against the fixture', () => {
   it('strips the query string from the fallback identity', () => {
     // The first reel's video URL carries ?efg=1&oh=xyz.
     const container = findReelContainers()[0];
-    container.removeAttribute('data-doomscroll-shortcode');
+    container.removeAttribute('data-reel-code');
     expect(extractReel(container).identity).toBe('creatorone|abc123.mp4');
   });
 });

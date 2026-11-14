@@ -39,6 +39,30 @@ export function isNewReelEvent(value: unknown): value is NewReelEvent {
   );
 }
 
+/**
+ * Shrinks page-controlled text to the limits `isNewReelEvent` enforces.
+ *
+ * A caption, handle, or video name longer than those limits used to fail the
+ * write and then expire out of the pending queue, so the view was lost. The
+ * text is truncated instead; the watch time is what has to be kept.
+ */
+export function clampNewReelEvent(event: NewReelEvent): NewReelEvent {
+  const text = (value: string | null, max: number): string | null =>
+    value == null ? null : value.slice(0, max);
+  const reelShortcode = event.reelShortcode.slice(0, 2048);
+  return {
+    ...event,
+    reelShortcode: reelShortcode.length > 0 ? reelShortcode : 'unknown|',
+    captionText: text(event.captionText, 30_000),
+    audioName: text(event.audioName, 4000),
+    authorHandle: text(event.authorHandle, 256),
+    hashtags: event.hashtags
+      .filter((tag) => typeof tag === 'string' && tag.length > 0)
+      .slice(0, 200)
+      .map((tag) => tag.slice(0, 512)),
+  };
+}
+
 export async function keepPendingView(event: NewReelEvent): Promise<void> {
   await chrome.storage.local.set({
     [PENDING_VIEW_PREFIX + event.id]: { event, queuedAt: Date.now() },

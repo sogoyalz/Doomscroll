@@ -1,3 +1,4 @@
+import { ReelReview } from './ReelReview.js';
 // One scrolling session at a time, with the reels in the order they came.
 //
 // The other views aggregate; this one deliberately does not. Detection acts on
@@ -157,6 +158,15 @@ export function Sessions({ sessions }: Props) {
                   </p>
                 ) : (
                   <>
+                    <p>
+                      Review topics and emotional tone separately below. These are text
+                      suggestions, not measured accuracy. Reviews stay on this device and are
+                      included in Export reels. They do not train a model automatically or
+                      change historical alerts.
+                    </p>
+                    {reels.map((reel) => (
+                      <ReelReview key={reel.id} reel={reel} />
+                    ))}
                     <div className="strip">
                       {reels.map((reel) => (
                         <span

@@ -1,4 +1,24 @@
+export interface ReelReview {
+  engine?: string;
+  topic: string | null;
+  tone: string | null;
+  predictedTopic: string | null;
+  predictedTone: string | null;
+  version: number;
+  reviewedAt: number;
+}
+
+export interface ClassificationDetails {
+  topic: string | null;
+  tone: string | null;
+  engine: string;
+  status: 'classified' | 'uncertain' | 'fallback';
+}
+
 export interface ReelEvent {
+  classificationDetails?: ClassificationDetails;
+  /** Human labels kept separate from predictions; deleted with the reel. */
+  review?: ReelReview;
   id: string; // uuid v4
   /**
    * The reel's identity: the React fiber shortcode when the MAIN-world bridge
@@ -77,6 +97,7 @@ export interface UserSettings {
 }
 
 export interface ClassificationResult {
+  details?: ClassificationDetails;
   category: string;
   confidence: number;
   subtags: string[];
@@ -206,4 +227,7 @@ export interface InterventionLogEntry {
 
 // What the content script sends: everything except the classification
 // fields, which the background worker fills in.
-export type NewReelEvent = Omit<ReelEvent, 'category' | 'categoryConfidence' | 'subtags'>;
+export type NewReelEvent = Omit<
+  ReelEvent,
+  'category' | 'categoryConfidence' | 'subtags' | 'review' | 'classificationDetails'
+>;

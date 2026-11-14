@@ -24,7 +24,8 @@
 body {
   margin: 0;
   padding: 0 24px 80px;
-  background: var(--bg);
+  background:
+    radial-gradient(80% 40% at 0% 0%, rgba(223, 174, 66, 0.12), transparent 46%), var(--bg);
   color: var(--text);
   font:
     14px/1.6 -apple-system,
@@ -529,6 +530,8 @@ button.action.danger:hover {
 .stack-band {
   display: block;
   width: 100%;
+  transform-origin: bottom center;
+  animation: stack-in 0.55s ease both;
 }
 /* Days with barely any reels: the mix is real but the sample is not worth
    reading, and a full-height bar would claim otherwise. */
@@ -700,4 +703,32 @@ summary:focus-visible {
   margin: 12px 0 0;
   color: var(--alert);
   font-size: 13px;
+}
+
+@keyframes stack-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stack-band {
+    animation: none;
+  }
+}
+
+.reel-review {
+  padding: 12px 0;
+  border-bottom: 1px solid currentColor;
+  overflow-wrap: anywhere;
+}
+.reel-review summary {
+  cursor: pointer;
+}
+.reel-review select {
+  max-width: 100%;
+  margin: 6px 0;
+}
+.reel-review p {
+  line-height: 1.5;
 }

@@ -18,7 +18,7 @@ function reel(overrides = {}) {
 
 /** The panel's rendered text, as the person running a session would read it. */
 function panelText() {
-  const host = document.getElementById('doomscroll-hud');
+  const host = document.getElementById('reel-diag');
   return host?.shadowRoot?.textContent ?? '';
 }
 
@@ -33,7 +33,7 @@ afterEach(() => {
 describe('mountHud', () => {
   it('renders into a shadow root so Instagram styles cannot reach it', () => {
     mountHud();
-    const host = document.getElementById('doomscroll-hud');
+    const host = document.getElementById('reel-diag');
     expect(host?.shadowRoot).toBeTruthy();
   });
 
@@ -41,7 +41,7 @@ describe('mountHud', () => {
     // Instagram re-renders body's children aggressively, and a node it does
     // not own is a node it may remove.
     mountHud();
-    expect(document.getElementById('doomscroll-hud')?.parentElement).toBe(
+    expect(document.getElementById('reel-diag')?.parentElement).toBe(
       document.documentElement,
     );
   });
@@ -49,14 +49,14 @@ describe('mountHud', () => {
   it('is idempotent — flipping the setting twice leaves one panel', () => {
     mountHud();
     mountHud();
-    expect(document.querySelectorAll('#doomscroll-hud')).toHaveLength(1);
+    expect(document.querySelectorAll('#reel-diag')).toHaveLength(1);
   });
 
   it('removes itself cleanly', () => {
     mountHud();
     unmountHud();
     expect(isHudMounted()).toBe(false);
-    expect(document.getElementById('doomscroll-hud')).toBeNull();
+    expect(document.getElementById('reel-diag')).toBeNull();
   });
 });
 
@@ -126,7 +126,7 @@ describe('pushHudRow', () => {
     // the identity and author are rendered — and those come from the page too.
     mountHud();
     pushHudRow(reel({ identity: '<img src=x onerror=alert(1)>' }), 3000);
-    const shadow = document.getElementById('doomscroll-hud').shadowRoot;
+    const shadow = document.getElementById('reel-diag').shadowRoot;
     expect(shadow.querySelector('img')).toBeNull();
     expect(panelText()).toContain('<img src=x onerror=alert(1)>');
   });

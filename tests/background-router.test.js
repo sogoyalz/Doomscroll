@@ -491,7 +491,7 @@ describe('delivery and sender regressions', () => {
     expect(detect.runDetection).toHaveBeenCalledOnce();
   });
 
-  it.each(['CLEAR_DATA', 'UPDATE_SETTINGS', 'EXPORT_DATA', 'GET_SESSION_REELS'])(
+  it.each(['CLEAR_DATA', 'UPDATE_SETTINGS', 'EXPORT_DATA', 'GET_SESSION_REELS', 'REVIEW_REEL'])(
     'rejects %s from content scripts',
     async (type) => {
       expect(
@@ -539,4 +539,52 @@ describe('delivery and sender regressions', () => {
       spy.mockRestore();
     }
   });
+
+  it('counts extraction samples from two tabs without dropping one', async () => {
+    const sender = {
+      id: 'test',
+      url: 'https://www.instagram.com/reels/example/',
+      tab: { id: 7 },
+    };
+    const sample = (hasAuthor) => ({
+      type: 'EXTRACTION_OBSERVED',
+      payload: {
+        hasAuthor,
+        hasText: true,
+        hasAudio: false,
+        fromFiber: true,
+        audioChannel: null,
+        bridgeStatus: 'ok',
+        now: NOW,
+      },
+    });
+    await Promise.all([send(sample(true), sender), send(sample(false), sender)]);
+    expect(store['doomscroll:extractionHealth'].samples).toBe(2);
+    expect(store['doomscroll:extractionHealth'].missingAuthor).toBe(1);
+  });
+});
+
+it('saves reviews independently, preserves them on relabel, and deletes them with history', async () => {
+  const event = payload({ captionText: 'guitar cover' });
+  await send({ type: 'REEL_VIEW_LOGGED', payload: event });
+  const response = await send({
+    type: 'REVIEW_REEL',
+    payload: { id: event.id, topic: 'fashion', tone: null },
+  });
+  expect(response.ok).toBe(true);
+  expect(response.data.review.predictedTopic).toBe('music');
+  expect(response.data.category).toBe('music');
+  const { reclassifyAll } = await import('../src/background/reclassify.ts');
+  await reclassifyAll();
+  expect((await db.getReelEvent(event.id)).review.topic).toBe('fashion');
+  await send({ type: 'CLEAR_DATA', payload: {} });
+  expect(await db.getReelEvent(event.id)).toBeUndefined();
+  expect(
+    (
+      await send({
+        type: 'REVIEW_REEL',
+        payload: { id: event.id, topic: 'fashion', tone: null },
+      })
+    ).ok,
+  ).toBe(false);
 });

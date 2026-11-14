@@ -5,7 +5,13 @@
 // reels, zero-hashtag captions, and original-audio reels all occur normally.
 // Extraction must degrade to nulls, never throw. See docs/dom-notes.md §3–6.
 
-import { AUTHOR_LINK_SELECTOR, SHORTCODE_ATTR, type ShortcodeSource } from './dom.js';
+import {
+  AUTHOR_LINK_SELECTOR,
+  isPublishedShortcode,
+  SHORTCODE_ATTR,
+  SHORTCODE_SRC_ATTR,
+  type ShortcodeSource,
+} from './dom.js';
 
 export interface ExtractedReel {
   /** React fiber shortcode, when the MAIN-world bridge resolved one. */
@@ -217,9 +223,18 @@ export function extractAuthorHandle(container: HTMLElement): string | null {
   return null;
 }
 
-/** Shortcode published by the MAIN-world bridge, if it resolved one. */
+/**
+ * Shortcode published by the MAIN-world bridge, if it resolved one.
+ *
+ * Both checks are required. The page can set the attribute itself, so a value
+ * is only accepted when the bridge also marked it fiber-derived and it has
+ * the shape of an Instagram shortcode.
+ */
 export function extractShortcode(container: HTMLElement): string | null {
-  return container.getAttribute(SHORTCODE_ATTR) || null;
+  const code = container.getAttribute(SHORTCODE_ATTR);
+  if (!isPublishedShortcode(code)) return null;
+  if (container.getAttribute(SHORTCODE_SRC_ATTR) !== 'fiber') return null;
+  return code;
 }
 
 /**
@@ -287,6 +302,41 @@ export function mergeExtractions(
 ): ExtractedReel {
   if (!later) return snapshot;
   return fillMissingFields(snapshot, later);
+}
+
+/**
+ * Whether the heartbeat can leave this snapshot alone.
+ *
+ * A settled reel already has its shortcode, caption, and video, and either
+ * a stored audio name or no audio row on the page. Reading it again calls
+ * innerText, which forces layout, once a second for as long as the reel
+ * stays on screen. Original-audio reels never grow an audio row, so without
+ * this check that cost never stops. A row that shows up later is not settled.
+ *
+ * A null shortcode is not settled: the bridge often tags it a moment later,
+ * and that tag is what keeps the view as one reel. A changed author or video
+ * means the container was recycled and must be read in full.
+ */
+/** True when the page has an audio row the snapshot has not read yet. Query only, no layout. */
+function hasUnreadAudioRow(snapshot: ExtractedReel, container: HTMLElement): boolean {
+  if (snapshot.audioName) return false;
+  for (const { selector } of AUDIO_LINK_SELECTORS) {
+    if (container.querySelector(selector)) return true;
+  }
+  return container.querySelector(AUDIO_ICON_SELECTOR) !== null;
+}
+
+export function snapshotSettled(snapshot: ExtractedReel, container: HTMLElement): boolean {
+  if (!snapshot.shortcode || !snapshot.captionText || !snapshot.videoBasename) return false;
+  // Original-audio reels never grow a row, so they can settle. A row that
+  // appears after the caption must still be read — dropping it is how a live
+  // sample ends up with no audio at all.
+  if (hasUnreadAudioRow(snapshot, container)) return false;
+  return (
+    extractShortcode(container) === snapshot.shortcode &&
+    extractAuthorHandle(container) === snapshot.authorHandle &&
+    extractVideoBasename(container) === snapshot.videoBasename
+  );
 }
 
 /** True when a snapshot is missing text or video identity a later read might supply. */

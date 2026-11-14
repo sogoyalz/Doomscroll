@@ -21,6 +21,7 @@ import {
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
+import { auditSourceTree } from './lib/store-permissions.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = join(root, 'dist');
@@ -56,16 +57,40 @@ function inspect(directory, prefix = '') {
     else if (
       !(
         path === 'manifest.json' ||
+        /^models\/nli-deberta-v3-xsmall\/(?:config.json|tokenizer.json|tokenizer_config.json|special_tokens_map.json|onnx\/model_quantized.onnx)$/.test(
+          path,
+        ) ||
+        /^runtime\/ort-wasm-simd-threaded(?:\.jsep|\.asyncify)?\.(?:mjs|wasm)$/.test(path) ||
+        path === 'MODEL-LICENSE.txt' ||
         path === 'service-worker-loader.js' ||
-        /^assets\/[^/]+\.(?:js|css)$/.test(path) ||
+        /^assets\/[^/]+\.(?:js|css|wasm|mjs)$/.test(path) ||
         /^assets\/icons\/icon(?:16|48|128)\.png$/.test(path) ||
-        /^src\/(?:popup|options)\/index\.html$/.test(path)
+        /^src\/(?:popup|options|model)\/index\.html$/.test(path)
       )
     )
       problems.push(`unexpected file in build: ${path}`);
   }
 }
 inspect(dist);
+// Refuse a missing or tampered model even when packaging an existing dist.
+const modelAssets = JSON.parse(readFileSync(join(root, 'scripts/model-assets.json'), 'utf8'));
+for (const [file, expected] of Object.entries(modelAssets.files)) {
+  const path = join(dist, 'models/nli-deberta-v3-xsmall', file);
+  if (
+    !existsSync(path) ||
+    createHash('sha256').update(readFileSync(path)).digest('hex') !== expected
+  ) {
+    problems.push(`missing or altered model asset: ${file}`);
+  }
+}
+for (const file of [
+  'src/model/index.html',
+  'runtime/ort-wasm-simd-threaded.asyncify.mjs',
+  'runtime/ort-wasm-simd-threaded.asyncify.wasm',
+  'MODEL-LICENSE.txt',
+]) {
+  if (!existsSync(join(dist, file))) problems.push(`missing model runtime: ${file}`);
+}
 
 if (manifest.version !== pkg.version) {
   // Chrome uses the manifest version; package.json is what everything else
@@ -97,6 +122,10 @@ for (const script of scripts) {
 const worker = manifest.background?.service_worker;
 if (!worker) problems.push('no background service worker declared');
 else if (!existsSync(join(dist, worker))) problems.push(`service worker missing: ${worker}`);
+
+// The store form is reviewed against the manifest. A permission the code does
+// not use, or a network call the listing denies, is a rejection.
+problems.push(...auditSourceTree(manifest, join(root, 'src')));
 
 if (problems.length) {
   console.error('\n  Packaging checks failed:');

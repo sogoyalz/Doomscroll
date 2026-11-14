@@ -2,22 +2,26 @@
   "name": "doomscroll",
   "version": "1.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "package": "npm run build && node scripts/package.mjs",
     "package:verify": "node scripts/verify-package.mjs",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx,.js,.cjs",
     "format": "prettier --write .",
     "test:browser": "playwright test",
     "security:check": "node scripts/check-sensitive.mjs HEAD",
     "verify": "npm run typecheck && npm run lint && npm test && npm run package && npm run test:browser",
-    "assets:store": "node scripts/store-assets.mjs"
+    "assets:store": "node scripts/store-assets.mjs",
+    "model:prepare": "node scripts/prepare-model.mjs",
+    "prebuild": "npm run model:prepare"
   },
   "dependencies": {
+    "@huggingface/transformers": "4.3.2",
     "idb": "^8.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -32,6 +36,7 @@
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/coverage-v8": "^5.0.5",
     "esbuild": "^0.28.2",
     "eslint": "^8.57.0",
     "fake-indexeddb": "^6.2.5",

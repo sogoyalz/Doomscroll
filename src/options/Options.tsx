@@ -280,6 +280,28 @@ export function Options() {
         </label>
       </section>
 
+      <section className="section">
+        <h2 className="section-label">Classification engine</h2>
+        <label>
+          Engine{' '}
+          <select
+            value={settings.classificationMode}
+            onChange={(e) =>
+              void patch({
+                classificationMode: e.target.value as UserSettings['classificationMode'],
+              })
+            }
+          >
+            <option value="local-rules">Local keyword rules</option>
+            <option value="local-ml">Trained local model (DeBERTa)</option>
+          </select>
+        </label>
+        <p className="section-note">
+          The trained model reads captions and hashtags on this device. It does not see video or
+          hear speech, and is English-focused. Scores are not measured accuracy. Changes apply
+          to new views. Model failures fall back to rules and are marked in session reviews.
+        </p>
+      </section>
       <ExtractionHealthPanel health={health} />
 
       <section className="section">

@@ -58,7 +58,7 @@ beforeEach(async () => {
 describe('classification on the write path', () => {
   it('stores the category alongside the event', async () => {
     const event = makeEvent({ captionText: 'crying again, so lonely', hashtags: ['sad'] });
-    await recordReelView(event, classifyReel(event));
+    await recordReelView(event, await classifyReel(event));
 
     const [stored] = await getAllReelEvents();
     expect(stored.category).toBe('sad');
@@ -68,7 +68,7 @@ describe('classification on the write path', () => {
 
   it('stores a reel with no text as unclassified, not neutral', async () => {
     const event = makeEvent();
-    await recordReelView(event, classifyReel(event));
+    await recordReelView(event, await classifyReel(event));
 
     const [stored] = await getAllReelEvents();
     expect(stored.category).toBeNull();
@@ -78,7 +78,7 @@ describe('classification on the write path', () => {
   it('keeps the inputs needed to re-score later', async () => {
     // Discarding these would make the lexicon un-tunable without a data wipe.
     const event = makeEvent({ captionText: 'hello', hashtags: ['fyp'], audioName: 'A · B' });
-    await recordReelView(event, classifyReel(event));
+    await recordReelView(event, await classifyReel(event));
 
     const [stored] = await getAllReelEvents();
     expect(stored.captionText).toBe('hello');
@@ -99,7 +99,7 @@ describe('reclassifyAll', () => {
 
   it('reports zero when nothing changes', async () => {
     const event = makeEvent({ captionText: 'my anxiety is spiraling' });
-    await recordReelView(event, classifyReel(event));
+    await recordReelView(event, await classifyReel(event));
 
     expect(await reclassifyAll()).toBe(0);
   });
@@ -148,4 +148,18 @@ describe('reclassifyIfLexiconChanged', () => {
     expect(await reclassifyIfLexiconChanged()).toBe(1);
     expect((await getAllReelEvents())[0].category).toBe('anxious');
   });
+});
+
+it('keeps stored model predictions and reviews during a rules lexicon refresh', async () => {
+  const event = makeEvent({ captionText: 'guitar cover' });
+  const classification = {
+    category: 'music',
+    confidence: 0.9,
+    subtags: [],
+    details: { topic: 'music', tone: null, engine: 'deberta-nli-q8-v1', status: 'classified' },
+  };
+  await recordReelView(event, classification);
+  await reclassifyAll('local-rules');
+  expect((await getAllReelEvents())[0].classificationDetails).toEqual(classification.details);
+  expect(await reclassifyAll('local-ml')).toBe(0);
 });

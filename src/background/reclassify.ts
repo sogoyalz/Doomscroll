@@ -23,6 +23,9 @@ export async function reclassifyAll(
   mode: UserSettings['classificationMode'] = 'local-rules',
   gapMs?: number,
 ): Promise<number> {
+  // Model inference is for new views. Do not re-run a large archive inside
+  // a short-lived worker or overwrite saved model predictions with rules.
+  if (mode === 'local-ml') return 0;
   const events = await getAllReelEvents();
   if (!events.length) return 0;
 
@@ -32,7 +35,11 @@ export async function reclassifyAll(
   const rewrites: ReelEvent[] = [];
 
   for (const event of events) {
-    const classification = classifyReel(event, mode);
+    if (event.classificationDetails) {
+      current.push(event);
+      continue;
+    }
+    const classification = await classifyReel(event, mode);
     const category = classification?.category ?? null;
     if (
       category === event.category &&
@@ -78,6 +85,7 @@ export async function reclassifyIfLexiconChanged(
   mode: UserSettings['classificationMode'] = 'local-rules',
   gapMs?: number,
 ): Promise<number> {
+  if (mode === 'local-ml') return 0;
   let stored: unknown;
   try {
     ({ [LEXICON_VERSION_KEY]: stored } = await chrome.storage.local.get(LEXICON_VERSION_KEY));

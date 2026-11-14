@@ -25,8 +25,21 @@ import type { AuthorBreakdown, SessionSummary } from './insights.js';
 export type ExportKind = 'reels' | 'detection' | 'interventions';
 
 export type ExtensionMessage =
+  | { type: 'REVIEW_REEL'; payload: { id: string; topic: string | null; tone: string | null } }
   | { type: 'GET_SESSION_ID'; payload: { startedAt: number; endedAt: number } }
   | { type: 'REEL_VIEW_LOGGED'; payload: NewReelEvent }
+  | {
+      type: 'EXTRACTION_OBSERVED';
+      payload: {
+        hasAuthor: boolean;
+        hasText: boolean;
+        hasAudio: boolean;
+        fromFiber: boolean;
+        audioChannel: string | null;
+        bridgeStatus: 'ok' | 'no-fiber' | 'no-code' | 'absent';
+        now: number;
+      };
+    }
   // Background -> content script, via chrome.tabs.sendMessage. The only
   // message that travels in that direction, and the reason the content script
   // has an onMessage listener at all.
@@ -74,8 +87,10 @@ export type MessageResult<T> = { ok: true; data: T } | { ok: false; error: strin
 
 // Response shape per route, so senders get a typed result back.
 export interface MessageResponses {
+  REVIEW_REEL: ReelEvent;
   GET_SESSION_ID: { id: string };
   REEL_VIEW_LOGGED: { queued: boolean };
+  EXTRACTION_OBSERVED: { ok: true };
   /** Whether the content script actually put something on screen. */
   INTERVENE: { shown: boolean };
   INTERVENTION_DISMISSED: { ok: true };

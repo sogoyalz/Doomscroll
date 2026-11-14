@@ -19,7 +19,7 @@ import type { ExtractedReel } from './extractor.js';
  * it cannot reach Instagram's. The optional panel contains viewing metadata;
  * keep screenshots local. Its open root supports inspection during validation.
  */
-const HOST_ID = 'doomscroll-hud';
+const HOST_ID = 'reel-diag';
 
 /** Recent reels shown. Enough to see a pattern, short enough to stay small. */
 const HISTORY_LIMIT = 5;

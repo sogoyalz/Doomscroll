@@ -41,6 +41,7 @@ let sendMessage;
 
 globalThis.chrome = {
   runtime: {
+    id: 'doomscroll-test',
     onMessage: {
       addListener: (fn) => {
         listener = fn;
@@ -70,7 +71,7 @@ await import('../src/content/index.ts');
 const { BREAK_DESTINATION } = await import('../src/shared/break.ts');
 
 function shadow() {
-  return document.getElementById('doomscroll-overlay')?.shadowRoot ?? null;
+  return document.getElementById('reel-interrupt')?.shadowRoot ?? null;
 }
 
 function click(match) {
@@ -78,14 +79,14 @@ function click(match) {
 }
 
 /** Delivers an INTERVENE the way the worker does. */
-function intervene(payload = {}) {
+function intervene(payload = {}, sender = { id: 'doomscroll-test' }) {
   return new Promise((resolve) => {
     listener(
       {
         type: 'INTERVENE',
         payload: { id: 'i1', level: 'overlay', category: 'sad', streak: 12, ...payload },
       },
-      {},
+      sender,
       resolve,
     );
   });
@@ -100,7 +101,7 @@ beforeEach(() => {
   dwell.pause.mockReset();
   dwell.resume.mockReset();
   sendMessage = vi.fn().mockResolvedValue({ ok: true, data: { goTo: BREAK_DESTINATION } });
-  document.getElementById('doomscroll-overlay')?.remove();
+  document.getElementById('reel-interrupt')?.remove();
 });
 
 describe('receiving an interruption', () => {
@@ -117,6 +118,28 @@ describe('receiving an interruption', () => {
 
   it('ignores anything that is not an interruption', () => {
     expect(listener({ type: 'GET_STATS', payload: {} }, {}, () => {})).toBe(false);
+  });
+
+  it('does not show a prompt from another extension', async () => {
+    expect(await intervene({}, { id: 'someone-else' })).toEqual({
+      ok: true,
+      data: { shown: false },
+    });
+    expect(shadow()).toBeNull();
+  });
+
+  it('does not show a prompt whose payload is not an interruption', () => {
+    expect(
+      listener(
+        {
+          type: 'INTERVENE',
+          payload: { id: 'i1', level: 'overlay', category: 'sad', streak: 1.5 },
+        },
+        { id: 'doomscroll-test' },
+        () => {},
+      ),
+    ).toBe(false);
+    expect(shadow()).toBeNull();
   });
 });
 
@@ -153,6 +176,18 @@ describe('taking a break', () => {
 
   it('falls back to a destination of its own when none comes back', async () => {
     sendMessage = vi.fn().mockResolvedValue(undefined);
+
+    await intervene();
+    click(/Take a break/);
+    await settle();
+
+    expect(nav.goTo).toHaveBeenCalledWith(BREAK_DESTINATION);
+  });
+
+  it('leaves for the Instagram home feed even if the reply names somewhere else', async () => {
+    sendMessage = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: { goTo: 'https://evil.example/' } });
 
     await intervene();
     click(/Take a break/);

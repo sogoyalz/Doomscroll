@@ -27,6 +27,7 @@ instagram-*/
 # Browser test artifacts and isolated test profiles
 test-results/
 playwright-report/
+coverage/
 doomscroll-*.zip.sha256
 
 # Local-only legacy workspace backup and editor metadata
@@ -53,3 +54,10 @@ Screen Recording*
 *.mov
 *.mp4
 *.webm
+
+# Reproducible pretrained weights and runtime assets (see model:prepare)
+public/models/
+public/runtime/
+
+# Personal developer handoff report
+docs/developer-report.md

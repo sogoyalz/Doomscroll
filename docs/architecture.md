@@ -39,7 +39,7 @@ instagram.com
       ├─ content/main-world.ts        MAIN world — the only place React fiber
       │                               props are reachable. Resolves each
       │                               container's shortcode and republishes it
-      │                               as data-doomscroll-shortcode.
+      │                               as data-reel-code.
       ▼
 ┌───────────────────────────────────────────────┐
 │ content/index.ts         isolated world       │
@@ -164,8 +164,8 @@ Events retain the caption, hashtags, and audio name they were scored from, so
 the lexicon can be tuned without discarding history: bump `LEXICON_VERSION`
 and stored events are re-scored and their aggregates rebuilt on next load.
 
-The reserved `local-ml` mode falls back to the rules engine and is outside
-v1 scope. Classification runs locally.
+`local-ml` selects the bundled pretrained DeBERTa text engine; see below.
+Classification runs locally.
 
 ## Pattern detection
 
@@ -248,3 +248,19 @@ person's scrolling before anything is allowed to act on them.
 - **Intervention ships off by default.** A trailing baseline does not exist in
   week one, and substituting a fixed threshold would reintroduce the false
   positives the baseline is there to prevent.
+
+### Pretrained local inference
+
+`local-ml` dispatches asynchronously through `background/model.ts` to the hidden
+`src/model/index.html` document. It loads a pinned quantized DeBERTa NLI model
+and single-thread WASM from packaged assets. Remote models are disabled and the
+extension-page CSP restricts connections to self. No video or speech is processed.
+
+Topic and tone use separate zero-shot label sets; the legacy detection category
+prefers a qualifying tone, then a topic. Scores below thresholds or with an
+insufficient margin abstain. Most non-Latin input falls back to the existing
+rules; Latin-script language detection is not provided. Inference has a 20-second
+timeout, after which the offscreen document is closed and a marked rules fallback
+is stored. Historical model results are preserved during lexicon migrations.
+Reviews record the prediction's engine, and exported labels can evaluate the
+saved model results separately from the current rules.

@@ -173,6 +173,8 @@ export async function recordReelViewOnce(
 
   const reelEvent: ReelEvent = {
     ...event,
+    review: undefined,
+    classificationDetails: classification?.details,
     category: classification?.category ?? null,
     categoryConfidence: classification?.confidence ?? null,
     subtags: classification?.subtags ?? [],
