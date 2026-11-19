@@ -159,12 +159,12 @@ individual words, and emoji. Audio titles receive a lower weight than authored
 caption text. It produces a category, a heuristic confidence score, and matched
 terms; that score is not a calibrated probability.
 
-| Category group                                     | Labels                                                                                               |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Emotional categories, called “charged” in the code | Joyful, sad, breakup, anxious, angry, motivational, romantic                                         |
-| Topics                                             | Comedy, music, dance, food, fitness, sports, tech, fashion, travel, gaming, pets, art, entertainment |
-| Neutral                                            | Readable text that did not produce a qualifying category match                                       |
-| Unclassified                                       | No usable text signal; stored separately from neutral                                                |
+| Category group                                     | Labels                                                                                                         |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Emotional categories, called “charged” in the code | Joyful, sad, breakup, anxious, angry, motivational, romantic                                                   |
+| Topics                                             | Comedy, music, dance, food, fitness, sports, tech, fashion, travel, gaming, pets, art, entertainment, learning |
+| Neutral                                            | Readable text that did not produce a qualifying category match                                                 |
+| Unclassified                                       | No usable text signal; stored separately from neutral                                                          |
 
 The default classifier uses **local rules**. Settings also offers a trained local
 DeBERTa model (`local-ml`) for new views. There is no image understanding,
@@ -266,7 +266,7 @@ extension pages.
 | [`src/content/`](src/content/)         | DOM extraction, identity bridge, dwell clock, overlays, navigation, diagnostic HUD                       |
 | [`src/background/`](src/background/)   | Message routing, session assignment, IndexedDB, aggregation, detection, interventions, maintenance       |
 | [`src/shared/`](src/shared/)           | Classifier and lexicon, detection rules, settings validation, CSV encoding, analytics, message contracts |
-| [`src/popup/`](src/popup/)             | Watch time, category ring and bar, trend, and detection status                                  |
+| [`src/popup/`](src/popup/)             | Watch time, category ring and bar, trend, and detection status                                           |
 | [`src/options/`](src/options/)         | Settings, sessions, creators, logs, extraction health, tuning, data controls                             |
 | [`tests/`](tests/)                     | Unit and integration tests, including IndexedDB and message-pipeline behavior                            |
 | [`e2e/`](e2e/)                         | Packaged-extension tests in isolated Chromium profiles                                                   |
@@ -359,16 +359,16 @@ behavior for those inputs, not compatibility with every live layout.
 
 ## Troubleshooting
 
-| Symptom                              | What to check                                                                                                                                             |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No reels recorded                    | Load `dist/`, enable tracking, refresh Instagram after extension reload, and stay on a reel longer than 250 ms before moving on.                          |
-| Pattern detection is still learning  | It needs seven nonempty historical days and enough charged samples within the trailing fourteen days; today does not count toward that baseline.          |
-| No prompt despite a detected pattern | Check opt-in, the selected categories, streak length, current break, per-session limits, and cooldowns.                                                   |
-| Notifications do not appear          | Check the extension's optional notification permission and browser/OS notification settings. Stronger prompts can still be available.                     |
+| Symptom                              | What to check                                                                                                                                               |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No reels recorded                    | Load `dist/`, enable tracking, refresh Instagram after extension reload, and stay on a reel longer than 250 ms before moving on.                            |
+| Pattern detection is still learning  | It needs seven nonempty historical days and enough charged samples within the trailing fourteen days; today does not count toward that baseline.            |
+| No prompt despite a detected pattern | Check opt-in, the selected categories, streak length, current break, per-session limits, and cooldowns.                                                     |
+| Notifications do not appear          | Check the extension's optional notification permission and browser/OS notification settings. Stronger prompts can still be available.                       |
 | Missing audio or reel identities     | A notice appears on the page when identity cannot be read. Settings still has the full extraction health. Some reels simply have no caption or song credit. |
-| Stats say saves are failing          | Inspect the storage warning and extension service-worker errors. Available disk/storage and extension reloads can affect persistence.                     |
-| Old behavior after an update         | Rebuild, reload the extension, and refresh open Instagram tabs.                                                                                           |
-| Browser tests cannot launch          | Install Playwright Chromium and its system dependencies, then rebuild the release ZIP.                                                                    |
+| Stats say saves are failing          | Inspect the storage warning and extension service-worker errors. Available disk/storage and extension reloads can affect persistence.                       |
+| Old behavior after an update         | Rebuild, reload the extension, and refresh open Instagram tabs.                                                                                             |
+| Browser tests cannot launch          | Install Playwright Chromium and its system dependencies, then rebuild the release ZIP.                                                                      |
 
 Use the [live-session protocol](docs/live-session-protocol.md) for a structured
 manual check. Report reproducible issues with browser/extension versions and
@@ -446,7 +446,6 @@ blank human labels are excluded. Review a broad sample, including correct
 predictions, rather than only obvious mistakes. Selected reviews alone do not
 establish overall feed accuracy. A trained local model is available as described below; no remote inference is used.
 
-
 ### Trained local model
 
 Settings → Classification engine → **Trained local model (DeBERTa)** enables
@@ -464,7 +463,8 @@ not vision, speech understanding, or a demonstrated accuracy guarantee on your f
 Inference runs in a hidden extension document with bundled WASM. No reel text,
 model request, or correction leaves the device. Model errors or a 20-second
 inference timeout fall back to rules; session reviews identify that fallback.
-Old history is not bulk-reclassified with the model. Switching engines can affect
+Old history is not re-run through the model; saved model predictions are only
+re-combined with updated word lists. Switching engines can affect
 category distributions used by existing baselines; review alerts before enabling
 interruptions. The model adds roughly 84 MB of weights plus its runtime to the install.
 
@@ -474,6 +474,19 @@ An installed extension runs offline. Model assets are generated and ignored by G
 Run `node scripts/eval-model.mjs` after preparation for a synthetic development
 benchmark against the rules. Those authored examples are smoke tests, not an
 independent or representative estimate of Instagram accuracy.
+
+`node scripts/eval-benchmark.mjs [dev|holdout] [rules|model|both] [--errors]`
+scores the final stored category for both engines against 115 labeled,
+Instagram-style captions (`tests/fixtures/model/benchmark-*.json`), including
+love-song music reels, Hinglish, hashtag-only posts, and captions cut off with
+"… more". Use `dev` for tuning and reserve `holdout` for evaluation. Both sets use fictional
+examples. Measuring accuracy on Instagram requires separately reviewed real reels.
+
+In model mode the stored category combines both engines: a category written in
+the caption or hashtags stands, otherwise the model's topic names the reel, a
+model tone with no written support counts only at 0.9 or above, and a romantic
+tone never replaces a music or dance topic. The soundtrack is not read by
+either side of the combination.
 
 To evaluate saved model predictions against your own reviews, export reels and run
 `node scripts/eval-reviews.mjs /path/to/doomscroll-reels.csv holdout model`.

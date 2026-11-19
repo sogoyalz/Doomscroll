@@ -35,6 +35,7 @@ const TOPIC_COLORS: Record<TopicCategory, string> = {
   pets: '#84755f',
   art: '#787084',
   entertainment: '#6a7a6a',
+  learning: '#6f7f74',
 };
 
 // Typed against the taxonomy, not `string`. A category added there and

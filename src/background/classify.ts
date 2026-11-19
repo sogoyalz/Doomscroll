@@ -5,6 +5,7 @@ import {
 } from '@shared/classifier.js';
 import type { ClassificationResult, UserSettings } from '@shared/types.js';
 import { classifyWithModel } from './model.js';
+import { combineWithRules } from '@shared/model-labels.js';
 
 export async function classifyReel(
   input: ClassifierInput,
@@ -12,7 +13,10 @@ export async function classifyReel(
 ): Promise<ClassificationResult | null> {
   if (mode === 'local-ml') {
     try {
-      return await classifyWithModel(input);
+      // The model never reads the soundtrack, so neither does the rules side
+      // of the combination: a song title must not outvote the caption.
+      const written = classifyWithRules({ ...input, audioName: null });
+      return combineWithRules(written, await classifyWithModel(input));
     } catch {
       const fallback = classifyWithRules(input);
       return (

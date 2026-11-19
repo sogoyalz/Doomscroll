@@ -203,7 +203,7 @@ share arithmetic remains meaningful:
 | Tier | Categories | Role |
 |---|---|---|
 | **Charged** | joyful, sad, breakup, anxious, angry, motivational, romantic | Emotional registers; the only categories the detector acts on. |
-| **Topic** | comedy, music, dance, food, fitness, sports, tech, fashion, travel, gaming, pets, art, entertainment | Name the non-emotional majority of the feed so it does not pool into "neutral". |
+| **Topic** | comedy, music, dance, food, fitness, sports, tech, fashion, travel, gaming, pets, art, entertainment, learning | Name the non-emotional majority of the feed so it does not pool into "neutral". |
 
 Two further outcomes are deliberately distinguished: **`neutral`** means the
 classifier read text and found nothing charged; **`unclassified`** means there

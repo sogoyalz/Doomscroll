@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classify, hasSignal } from '../src/shared/classifier.ts';
+import { classify, cleanCaption, hasSignal } from '../src/shared/classifier.ts';
 import { LEXICON, TIE_BREAK_ORDER } from '../src/shared/lexicon.ts';
 import { CATEGORIES } from '../src/shared/taxonomy.ts';
 
@@ -391,8 +391,14 @@ describe('the general vocabulary applies to hashtags, not just the curated list'
     ).toBe('fashion');
   });
 
-  it('still reads a caption that is only a heart as romantic', () => {
-    expect(classify(input({ captionText: '❤️' })).category).toBe('romantic');
+  it('does not read the plain red heart as romance', () => {
+    // ❤️ is Instagram's general "like" heart. On music reels it was the most
+    // common reason a song was labelled romantic.
+    expect(classify(input({ captionText: '❤️' })).category).toBe('neutral');
+    expect(
+      classify(input({ captionText: '#fyp #viral ❤️', hashtags: ['fyp', 'viral'] })).category,
+    ).toBe('neutral');
+    expect(classify(input({ captionText: 'my love 😍' })).category).toBe('romantic');
   });
 
   it('still uses the song title when the caption names no category', () => {
@@ -405,4 +411,81 @@ describe('the general vocabulary applies to hashtags, not just the curated list'
       ).category,
     ).toBe('breakup');
   });
+});
+
+describe('love songs, cut-off captions, and study content', () => {
+  it('calls a caption about a love song music, not romantic', () => {
+    expect(
+      classify(input({ captionText: 'the song that reminds you of your crush 🎧' })).category,
+    ).toBe('music');
+    expect(
+      classify(
+        input({ captionText: 'Singing my favourite love song 🎤❤️', hashtags: ['cover'] }),
+      ).category,
+    ).toBe('music');
+  });
+  it('still calls a caption about a partner romantic', () => {
+    expect(classify(input({ captionText: 'date night with my girlfriend 😍' })).category).toBe(
+      'romantic',
+    );
+    expect(classify(input({ captionText: 'He proposed!!! I said yes 💍' })).category).toBe(
+      'romantic',
+    );
+  });
+  it('keeps a heartbreak reading charged even with a song in it', () => {
+    expect(
+      classify(
+        input({
+          captionText: 'we broke up and this song is all I play',
+          hashtags: ['breakup'],
+        }),
+      ).category,
+    ).toBe('breakup');
+  });
+  it('ignores the "… more" that Instagram adds to cut-off captions', () => {
+    expect(cleanCaption('The drawer is empty … more')).toBe('The drawer is empty');
+    expect(cleanCaption('Some caption... more')).toBe('Some caption');
+    expect(cleanCaption('… more')).toBeNull();
+    expect(cleanCaption('tell me more')).toBe('tell me more');
+    expect(classify(input({ captionText: '… more' }))).toBeNull();
+  });
+  it('names study and career advice as learning', () => {
+    expect(
+      classify(input({ captionText: 'A professor marked up this cold email at our career fair' })).category,
+    ).toBe('learning');
+    expect(
+      classify(input({ captionText: 'resume mistakes', hashtags: ['resumetips'] })).category,
+    ).toBe('learning');
+  });
+  it('names shows and films from their hashtags', () => {
+    expect(
+      classify(input({ captionText: 'coming this fall', hashtags: ['dcu', 'superman'] }))
+        .category,
+    ).toBe('entertainment');
+  });
+});
+
+describe('the love-song rule and the soundtrack', () => {
+  it('never promotes a weak soundtrack-only match into a label', () => {
+    const result = classify({
+      captionText: 'Trying on three different dresses for tonight',
+      hashtags: [],
+      audioName: 'Romantic love song',
+    });
+    expect(result.category).toBe('neutral');
+  });
+});
+
+it('does not read a personal "series" of videos as a TV show', () => {
+  expect(
+    classify({
+      captionText: 'the second in my series about organizing a bookshelf',
+      hashtags: [],
+      audioName: null,
+    }).category,
+  ).not.toBe('entertainment');
+  expect(
+    classify({ captionText: 'best web series of the year', hashtags: [], audioName: null })
+      .category,
+  ).toBe('entertainment');
 });

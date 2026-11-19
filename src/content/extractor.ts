@@ -5,6 +5,7 @@
 // reels, zero-hashtag captions, and original-audio reels all occur normally.
 // Extraction must degrade to nulls, never throw. See docs/dom-notes.md §3–6.
 
+import { cleanCaption } from '@shared/caption.js';
 import {
   AUTHOR_LINK_SELECTOR,
   isPublishedShortcode,
@@ -90,8 +91,8 @@ function captionElement(container: HTMLElement): HTMLElement | null {
 export function extractCaption(container: HTMLElement): string | null {
   const el = captionElement(container);
   if (!el) return null;
-  const text = readText(el);
-  return text || null;
+  // Collapsed captions end in Instagram's "… more" control, not the creator's text.
+  return cleanCaption(readText(el));
 }
 
 /**

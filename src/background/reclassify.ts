@@ -8,6 +8,8 @@
 
 import { getAllReelEvents, putDailyAggregates, putReelEvents } from './db.js';
 import { classifyReel } from './classify.js';
+import { classify } from '@shared/classifier.js';
+import { combineWithRules, MODEL_VERSION } from '@shared/model-labels.js';
 import { aggregateDay, groupByLocalDay } from '@shared/aggregation.js';
 import { LEXICON_VERSION } from '@shared/lexicon.js';
 import type { ReelEvent, UserSettings } from '@shared/types.js';
@@ -23,9 +25,11 @@ export async function reclassifyAll(
   mode: UserSettings['classificationMode'] = 'local-rules',
   gapMs?: number,
 ): Promise<number> {
-  // Model inference is for new views. Do not re-run a large archive inside
-  // a short-lived worker or overwrite saved model predictions with rules.
-  if (mode === 'local-ml') return 0;
+  // Model inference is for new views: a large archive is never re-run through
+  // the model inside a short-lived worker. Saved model predictions are instead
+  // re-combined with the current word lists, which needs no inference, and
+  // everything else is re-scored with the rules.
+  void mode;
   const events = await getAllReelEvents();
   if (!events.length) return 0;
 
@@ -36,10 +40,32 @@ export async function reclassifyAll(
 
   for (const event of events) {
     if (event.classificationDetails) {
-      current.push(event);
+      const details = event.classificationDetails;
+      const combined =
+        details.engine === MODEL_VERSION
+          ? combineWithRules(classify({ ...event, audioName: null }), {
+              category: event.category ?? 'neutral',
+              confidence: event.categoryConfidence ?? 0,
+              subtags: event.subtags,
+              details,
+            })
+          : null;
+      if (!combined || combined.category === event.category) {
+        current.push(event);
+        continue;
+      }
+      const recombined: ReelEvent = {
+        ...event,
+        category: combined.category,
+        categoryConfidence: combined.confidence,
+        subtags: combined.subtags,
+        classificationDetails: details,
+      };
+      current.push(recombined);
+      rewrites.push(recombined);
       continue;
     }
-    const classification = await classifyReel(event, mode);
+    const classification = await classifyReel(event, 'local-rules');
     const category = classification?.category ?? null;
     if (
       category === event.category &&
@@ -85,7 +111,6 @@ export async function reclassifyIfLexiconChanged(
   mode: UserSettings['classificationMode'] = 'local-rules',
   gapMs?: number,
 ): Promise<number> {
-  if (mode === 'local-ml') return 0;
   let stored: unknown;
   try {
     ({ [LEXICON_VERSION_KEY]: stored } = await chrome.storage.local.get(LEXICON_VERSION_KEY));

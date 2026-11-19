@@ -9,6 +9,8 @@ export interface ReelReview {
 }
 
 export interface ClassificationDetails {
+  topicConfidence?: number;
+  toneConfidence?: number;
   topic: string | null;
   tone: string | null;
   engine: string;

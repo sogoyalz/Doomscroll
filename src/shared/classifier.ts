@@ -12,6 +12,9 @@
 import { LEXICON, TIE_BREAK_ORDER, type ClassifiableCategory } from './lexicon.js';
 import { TOPIC_CATEGORIES, CHARGED_CATEGORIES, isCharged } from './taxonomy.js';
 import type { ClassificationResult } from './types.js';
+import { cleanCaption } from './caption.js';
+
+export { cleanCaption };
 
 export interface ClassifierInput {
   captionText: string | null;
@@ -177,6 +180,20 @@ function scoreCategory(category: ClassifiableCategory, input: ClassifierInput): 
   return result;
 }
 
+function cleanInput(input: ClassifierInput): ClassifierInput {
+  return { ...input, captionText: cleanCaption(input.captionText) };
+}
+
+/**
+ * Topics where a romantic word usually describes the song, not the reel.
+ *
+ * A cover of a love song, a playlist of romantic tracks, or a dance to one is
+ * music or dance content. Calling it romantic was the most visible mistake in
+ * real feeds. Sad and breakup songs are left charged on purpose: a run of
+ * heartbreak tracks is exactly the narrowing the detector looks for.
+ */
+const SONG_TOPICS: readonly ClassifiableCategory[] = ['music', 'dance'];
+
 /** True when there is nothing at all for the classifier to read. */
 export function hasSignal(input: ClassifierInput): boolean {
   return Boolean(
@@ -194,7 +211,8 @@ export function hasSignal(input: ClassifierInput): boolean {
  * charged. Storage keeps null as an unclassified event so a day of unreadable
  * reels can never pass as a calm one.
  */
-export function classify(input: ClassifierInput): ClassificationResult | null {
+export function classify(raw: ClassifierInput): ClassificationResult | null {
+  const input = cleanInput(raw);
   if (!hasSignal(input)) return null;
 
   const scores = TIE_BREAK_ORDER.map((category) => ({
@@ -243,6 +261,22 @@ export function classify(input: ClassifierInput): ClassificationResult | null {
     return { category: 'neutral', confidence: NEUTRAL_CONFIDENCE, subtags: [] };
   }
 
+  // A love song is music. When the caption is about a song or a dance at
+  // least as much as it is about romance, the topic names the reel. Applied
+  // after the floor, so a weak soundtrack match can never be promoted by it.
+  if (best.category === 'romantic') {
+    const song = scores
+      .filter((candidate) => SONG_TOPICS.includes(candidate.category))
+      .sort((a, b) => metric(b) - metric(a))[0];
+    if (song && metric(song) > 0 && metric(song) >= metric(best)) {
+      return {
+        category: song.category,
+        confidence,
+        subtags: [...song.matched].sort().slice(0, MAX_SUBTAGS),
+      };
+    }
+  }
+
   return {
     category: best.category,
     confidence,
@@ -263,11 +297,12 @@ function confidenceFor(top: number, second: number): number {
 }
 
 /** Independent, conservative labels for review. Unknown is not neutral. */
-export function classifyDimensions(input: ClassifierInput): {
+export function classifyDimensions(raw: ClassifierInput): {
   topic: string | null;
   tone: string | null;
 } {
   // Hashtags are extracted separately: do not count the same tag as prose too.
+  const input = cleanInput(raw);
   const authored = {
     ...input,
     captionText: input.captionText?.replace(/#[\p{L}\p{N}\p{M}_]+/gu, '') ?? null,

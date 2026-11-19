@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
+  combineWithRules,
   modelResult,
   modelText,
   TOPIC_LABELS,
@@ -34,7 +35,12 @@ describe('trained model decisions', () => {
     expect(modelText(input)).not.toContain('Romantic');
     const result = modelResult(score(TOPIC_LABELS.music), score(TONE_LABELS.romantic));
     expect(result.details).toMatchObject({ topic: 'music', tone: 'romantic' });
-    expect(result.category).toBe('romantic');
+    // A love song is music: the romantic tone stays in details for review.
+    expect(result.category).toBe('music');
+  });
+  it('still leads with a tone that is not about the song', () => {
+    const result = modelResult(score(TOPIC_LABELS.music), score(TONE_LABELS.sad));
+    expect(result.category).toBe('sad');
   });
   it('abstains on weak and tied predictions', () => {
     const result = modelResult(
@@ -75,5 +81,57 @@ describe('trained model decisions', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('combining the word lists with the model', () => {
+  const model = (category, topic, tone, confidence = 0.95) => ({
+    category,
+    confidence,
+    subtags: [],
+    details: { topic, tone, engine: 'deberta-nli-q8-v1', status: 'classified' },
+  });
+  const rules = (category) => ({ category, confidence: 0.6, subtags: ['x'] });
+
+  it('keeps a category the creator wrote and attaches the model details', () => {
+    const result = combineWithRules(rules('breakup'), model('joyful', null, 'joyful'));
+    expect(result.category).toBe('breakup');
+    expect(result.details.tone).toBe('joyful');
+  });
+  it('uses the model topic when the word lists found nothing', () => {
+    expect(
+      combineWithRules(rules('neutral'), model('learning', 'learning', null, 0.7)).category,
+    ).toBe('learning');
+  });
+  it('ignores a model tone that is not very sure', () => {
+    expect(
+      combineWithRules(rules('neutral'), model('angry', 'learning', 'angry', 0.8)).category,
+    ).toBe('learning');
+    expect(
+      combineWithRules(rules('neutral'), model('angry', null, 'angry', 0.8)).category,
+    ).toBe('neutral');
+  });
+  it('uses the score for the chosen topic when the tone falls below the interruption threshold', () => {
+    const prediction = modelResult(
+      score(TOPIC_LABELS.learning, 0.72),
+      score(TONE_LABELS.angry, 0.85),
+    );
+    expect(combineWithRules(rules('neutral'), prediction)).toMatchObject({
+      category: 'learning',
+      confidence: 0.72,
+    });
+  });
+  it('accepts a very sure model tone', () => {
+    expect(
+      combineWithRules(rules('neutral'), model('angry', null, 'angry', 0.95)).category,
+    ).toBe('angry');
+  });
+  it('never lets a romantic model tone replace a song topic', () => {
+    expect(
+      combineWithRules(rules('neutral'), model('music', 'music', 'romantic', 0.97)).category,
+    ).toBe('music');
+  });
+  it('falls back to the rules when the model returned nothing', () => {
+    expect(combineWithRules(rules('food'), null).category).toBe('food');
   });
 });

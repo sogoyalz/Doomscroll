@@ -43,6 +43,7 @@ export const TOPIC_CATEGORIES = [
   'pets',
   'art',
   'entertainment',
+  'learning',
 ] as const;
 
 // `neutral` is last so it reads as the fallback it is.

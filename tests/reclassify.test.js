@@ -163,3 +163,19 @@ it('keeps stored model predictions and reviews during a rules lexicon refresh', 
   expect((await getAllReelEvents())[0].classificationDetails).toEqual(classification.details);
   expect(await reclassifyAll('local-ml')).toBe(0);
 });
+
+it('re-combines a saved model prediction with the current word lists without inference', async () => {
+  const event = makeEvent({ captionText: 'Drafting a cold email to ask about lab hours … more' });
+  const details = {
+    topic: 'tech',
+    tone: null,
+    engine: 'deberta-nli-q8-v1',
+    status: 'classified',
+  };
+  await recordReelView(event, { category: 'tech', confidence: 0.7, subtags: [], details });
+  expect(await reclassifyIfLexiconChanged('local-ml')).toBe(1);
+  const [stored] = await getAllReelEvents();
+  expect(stored.category).toBe('learning');
+  // The model's own reading is kept for the review screen.
+  expect(stored.classificationDetails).toEqual(details);
+});

@@ -815,3 +815,12 @@ describe('a feed where nothing can be identified', () => {
     expect(isSameReel(a, { ...a })).toBe(true);
   });
 });
+
+describe('collapsed captions', () => {
+  it('drops the "… more" control from a cut-off caption', async () => {
+    const { extractCaption } = await import('../src/content/extractor.ts');
+    const container = document.createElement('div');
+    container.innerHTML = '<div dir="auto">Moving the last blue box … more</div>';
+    expect(extractCaption(container)).toBe('Moving the last blue box');
+  });
+});

@@ -233,6 +233,112 @@ test('the default 20-reel block is delivered and its dismiss delay can always ex
   expect(log[0].deliveredAt).toBeGreaterThan(0);
 });
 
+async function seedBaselineAndSession(now) {
+  await options.evaluate(async (now) => {
+    const open = indexedDB.open('doomscroll');
+    await new Promise((resolve, reject) => {
+      open.onsuccess = resolve;
+      open.onerror = reject;
+    });
+    const db = open.result;
+    const tx = db.transaction('dailyAggregates', 'readwrite');
+    for (let i = 1; i <= 7; i++) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      tx.objectStore('dailyAggregates').put({
+        date: key,
+        totalReels: 100,
+        totalMinutes: 10,
+        avgReelsPerSec: 0.1,
+        longestBingeMs: 60_000,
+        categoryBreakdown: { joyful: 90, sad: 10 },
+      });
+    }
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onerror = reject;
+    });
+    db.close();
+    await chrome.storage.local.set({
+      'doomscroll:session': { id: 'synthetic-session', lastActivityAt: now },
+    });
+  }, now);
+}
+async function seedSadRun(now, from, to) {
+  for (let i = from; i < to; i++)
+    await send('REEL_VIEW_LOGGED', {
+      id: `run-${i}`,
+      reelShortcode: `run-${i}`,
+      sessionId: 'synthetic-session',
+      startedAt: now - (40 - i) * 6000,
+      endedAt: now - (40 - i) * 6000 + 5000,
+      watchDurationMs: 5000,
+      captionText: 'crying again tonight, feeling so lonely',
+      hashtags: ['sad'],
+      audioName: null,
+      authorHandle: 'synthetic_creator',
+    });
+}
+/** Scrolls to a reel and waits until the view that just ended is stored. */
+async function watchNext(page, index) {
+  const before = (await events()).length;
+  await page.waitForTimeout(400);
+  await advance(page, index);
+  await expect.poll(async () => (await events()).length).toBeGreaterThan(before);
+}
+
+test('interruptions stay silent when off, then escalate once per level in the packaged extension', async () => {
+  const now = Date.now();
+  await seedBaselineAndSession(now);
+  await seedSadRun(now, 0, 9);
+  const page = await feed();
+
+  // Switched off (the default): a qualifying run is logged but never shown.
+  await watchNext(page, 1);
+  await page.waitForTimeout(800);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await send('GET_INTERVENTION_LOG')).toHaveLength(0);
+  const [latest] = await send('GET_DETECTION_LOG', { limit: 1 });
+  expect(latest).toMatchObject({ detected: true, category: 'sad', wouldHaveActed: false });
+
+  // Switched on, but the run's category is not one the user watches.
+  await send('UPDATE_SETTINGS', { interventionEnabled: true, watchedCategories: ['angry'] });
+  await watchNext(page, 2);
+  await page.waitForTimeout(800);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await send('GET_INTERVENTION_LOG')).toHaveLength(0);
+
+  // Watching sad: the next reel in the run earns the overlay, with no delay.
+  await send('UPDATE_SETTINGS', { watchedCategories: ['sad'] });
+  await watchNext(page, 1);
+  const keep = page.getByRole('button', { name: /Keep scrolling/ });
+  await expect(keep).toBeEnabled();
+  await keep.click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  let log = await send('GET_INTERVENTION_LOG');
+  expect(log).toHaveLength(1);
+  expect(log[0]).toMatchObject({ level: 'overlay', outcome: 'bypassed', category: 'sad' });
+  expect(log[0].deliveredAt).toBeGreaterThan(0);
+
+  // The same level does not fire twice in one session.
+  await watchNext(page, 2);
+  await page.waitForTimeout(800);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await send('GET_INTERVENTION_LOG')).toHaveLength(1);
+
+  // A run long enough for the block level escalates to the delayed prompt.
+  const stored = (await events()).length;
+  await seedSadRun(now, 9, 9 + (19 - stored));
+  await watchNext(page, 1);
+  await expect(keep).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Take a break' })).toBeEnabled();
+  log = await send('GET_INTERVENTION_LOG');
+  expect(log).toHaveLength(2);
+  expect(log[0]).toMatchObject({ level: 'block', outcome: 'pending' });
+  expect(log[0].streak).toBeGreaterThanOrEqual(20);
+});
+
 test('tracking restarts after a persisted page restoration', async () => {
   const page = await feed();
   await page.waitForTimeout(400);

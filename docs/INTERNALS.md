@@ -382,7 +382,7 @@ alarm means it would otherwise be stale for a session you are still in.
 | Tier | Members | Role |
 |---|---|---|
 | Charged | joyful, sad, breakup, anxious, angry, motivational, romantic | The only ones that can drive detection |
-| Topic | comedy, music, dance, food, fitness, sports, tech, fashion, travel, gaming, pets, art, entertainment | Keep ordinary content out of `neutral` |
+| Topic | comedy, music, dance, food, fitness, sports, tech, fashion, travel, gaming, pets, art, entertainment, learning | Keep ordinary content out of `neutral` |
 | `neutral` | — | Had text, matched nothing |
 | `unclassified` | — | Had **no text at all**; never stored as a category |
 
@@ -632,7 +632,7 @@ see the sample size.
   than any real movement. `MIN_TREND_POINTS = 3` and the returned `drawable`
   flag are owned here so the chart and the popup section around it cannot
   disagree.
-- **`stackByDay`** — per-day composition. The 13 topic categories pool into one
+- **`stackByDay`** — per-day composition. The 14 topic categories pool into one
   band: 21 stacked colours is a texture, not a chart. Denominator is the day's
   *total* reels including unreadable ones, since the no-text portion is a real
   part of what was watched.
