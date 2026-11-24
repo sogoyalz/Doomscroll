@@ -46,6 +46,7 @@ globalThis.chrome = {
   },
   tabs: {
     async sendMessage(tabId, message) {
+      if (message.type === 'PATTERN_REMINDER_READY') return true;
       if (tabSendFails) throw new Error('receiving end does not exist');
       tabMessages.push({ tabId, message });
       return { ok: true, data: { shown: true } };
@@ -98,8 +99,19 @@ describe('maybeIntervene', () => {
     const level = await maybeIntervene(detection(), on, 'session-1', 1, NOW);
     expect(level).toBe('notify');
     expect(notifications).toHaveLength(1);
-    // Nothing is sent to the tab: there is no overlay at this level.
+    // A readiness check creates no overlay.
     expect(tabMessages).toHaveLength(0);
+  });
+
+  it('suppresses desktop delivery when the originating tab is no longer eligible', async () => {
+    const ready = vi.spyOn(chrome.tabs, 'sendMessage').mockResolvedValueOnce(false);
+    try {
+      expect(await maybeIntervene(detection(), on, 'session-1', 1, NOW)).toBeNull();
+      expect(notifications).toHaveLength(0);
+      expect((await getInterventionLog())[0].deliveredAt).toBeNull();
+    } finally {
+      ready.mockRestore();
+    }
   });
 
   it('describes the feed in the notification, never the person', async () => {

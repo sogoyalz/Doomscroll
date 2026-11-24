@@ -142,7 +142,7 @@ export async function maybeIntervene(
   await putInterventionLog(entry);
   const delivered =
     level === 'notify'
-      ? await notify(detection)
+      ? await notify(detection, tabId)
       : await sendToTab(tabId, entry.id, level, detection);
   if (!delivered) return null;
   await putInterventionLog({ ...entry, deliveredAt: now });
@@ -166,7 +166,11 @@ function notificationText(detection: PatternDetection): string {
   );
 }
 
-async function notify(detection: PatternDetection): Promise<boolean> {
+async function notify(detection: PatternDetection, tabId: number | undefined): Promise<boolean> {
+  if (tabId === undefined) return false;
+  const eligible = await chrome.tabs.sendMessage(tabId, { type: 'PATTERN_REMINDER_READY' })
+    .catch(() => false);
+  if (eligible !== true) return false;
   const result = await showDesktopNotification('Your feed has narrowed', notificationText(detection));
   return result === 'accepted';
 }

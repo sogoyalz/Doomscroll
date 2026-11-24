@@ -64,6 +64,7 @@ globalThis.chrome = {
   },
   tabs: {
     async sendMessage(tabId, message) {
+      if (message.type === 'PATTERN_REMINDER_READY') return true;
       tabMessages.push({ tabId, ...message.payload });
       return { ok: true, data: { shown: true } };
     },

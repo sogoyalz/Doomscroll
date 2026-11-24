@@ -557,6 +557,11 @@ function start(): void {
 
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (sender.id !== chrome.runtime.id) return false;
+    if (message?.type === 'PATTERN_REMINDER_READY') {
+      respond(observing && !document.hidden && document.hasFocus() &&
+        isTrackingSurface(location.pathname) && tracker.currentTarget() !== null && !isOverlayShowing());
+      return false;
+    }
     if (message?.type === 'TIME_REMINDER_READY') {
       respond(timerEligible());
       return false;
