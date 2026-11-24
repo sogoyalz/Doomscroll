@@ -131,6 +131,17 @@ test('packaged popup and settings load with a working pause control', async () =
   await expect(pausedFeed.locator('[data-reel-code]')).toHaveCount(0);
 });
 
+test('reminders can be switched off after their baseline expires', async () => {
+  await send('UPDATE_SETTINGS', { interventionEnabled: true });
+  await options.reload();
+  const toggle = options.getByRole('checkbox', { name: /Allow Doomscroll to interrupt me/ });
+  await expect(toggle).toBeChecked();
+  await expect(toggle).toBeEnabled();
+  await options.locator('label.toggle').filter({ has: toggle }).click();
+  await expect.poll(async () => (await send('GET_SETTINGS')).interventionEnabled).toBe(false);
+  await expect(toggle).toBeDisabled();
+});
+
 test('real content scripts record scrolling, extract audio, and respect SPA privacy exclusions', async () => {
   await send('UPDATE_SETTINGS', { debugHud: true });
   const page = await feed();

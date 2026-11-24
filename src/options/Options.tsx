@@ -10,7 +10,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { send } from '@shared/client.js';
 import type { ExportKind } from '@shared/messages.js';
 import { CHARGED_CATEGORIES } from '@shared/taxonomy.js';
-import { MIN_BASELINE_DAYS, baselineStatus } from '@shared/patterns.js';
+import {
+  BASELINE_WINDOW_DAYS,
+  MIN_BASELINE_DAYS,
+  MIN_BASELINE_SAMPLE,
+  baselineStatus,
+} from '@shared/patterns.js';
 import { MINUTE_MS, SETTING_BOUNDS } from '@shared/defaults.js';
 import { colorForCategory } from '@shared/palette.js';
 import { formatDuration, formatPercent } from '@shared/format.js';
@@ -218,7 +223,6 @@ export function Options() {
   const brandNew = panelsFailed === 0 && log.length === 0 && daily.length === 0;
   const readiness = baselineStatus(daily);
   const baselineReady = readiness.ready;
-  const daysSeen = readiness.days;
   const drifting = health ? isDrifting(health) : false;
   const shortcodeDegraded = health ? isShortcodeDegraded(health) : false;
   const audioDark = health ? isAudioDark(health) : false;
@@ -313,10 +317,10 @@ export function Options() {
 
         {!baselineReady && (
           <div className="gate">
-            <strong>Not available yet.</strong> Detection measures against your own normal,
-            which needs roughly {MIN_BASELINE_DAYS} days of history to exist. Until then it
-            refuses to guess rather than falling back on a fixed rule that would flag perfectly
-            ordinary scrolling. {daysSeen} day{daysSeen === 1 ? '' : 's'} recorded so far.
+            <strong>Automatic reminders are waiting for more history.</strong> In the previous{' '}
+            {BASELINE_WINDOW_DAYS} days, you have {readiness.days} of {MIN_BASELINE_DAYS} active
+            days needed and {readiness.sample} of {MIN_BASELINE_SAMPLE} reels with an emotional
+            tone needed.
           </div>
         )}
 
@@ -324,7 +328,7 @@ export function Options() {
           <input
             type="checkbox"
             checked={settings.interventionEnabled}
-            disabled={!baselineReady}
+            disabled={!baselineReady && !settings.interventionEnabled}
             onChange={(e) => void enableInterventions(e.target.checked)}
           />
           <span className="switch" />
