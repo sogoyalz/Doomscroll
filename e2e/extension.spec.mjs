@@ -1,5 +1,5 @@
-import { test, expect, chromium } from '@playwright/test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { test as base, expect, chromium } from '@playwright/test';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -8,6 +8,10 @@ import { readFileSync } from 'node:fs';
 const { version } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
 );
+
+const test = base.extend({
+  notificationsGranted: [false, { option: true }],
+});
 
 let context, worker, options, extensionId, profile;
 const fixture = `<!doctype html><html><head><meta charset="utf-8"><style>
@@ -102,14 +106,27 @@ async function launchProfile() {
   await expect(options.getByLabel('Record the reels I watch')).toBeChecked();
 }
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ notificationsGranted }) => {
   profile = await mkdtemp(join(tmpdir(), 'doomscroll-browser-'));
   const extracted = join(profile, 'packaged-extension');
   // Test exactly what users receive, rather than only the build directory.
   execFileSync('unzip', ['-q', resolve(`doomscroll-${version}.zip`), '-d', extracted]);
-  const manifest = JSON.parse(readFileSync(join(extracted, 'manifest.json'), 'utf8'));
+  const manifestPath = join(extracted, 'manifest.json');
+  const packagedManifest = readFileSync(manifestPath, 'utf8');
+  const manifest = JSON.parse(packagedManifest);
   expect(manifest.version).toBe(version);
   expect(Number(manifest.minimum_chrome_version)).toBeGreaterThanOrEqual(116);
+  if (notificationsGranted) {
+    // Headless Chromium can't click the native optional-permission prompt. Seed the
+    // grant in this disposable profile, then restore the exact ZIP before exercising it.
+    expect(manifest.optional_permissions).toContain('notifications');
+    manifest.permissions.push('notifications');
+    manifest.optional_permissions = manifest.optional_permissions.filter((p) => p !== 'notifications');
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    await launchProfile();
+    await context.close();
+    await writeFile(manifestPath, packagedManifest);
+  }
   await launchProfile();
 });
 test.afterEach(async () => {
@@ -373,6 +390,40 @@ test('interruptions stay silent when off, then escalate once per level in the pa
   expect(log).toHaveLength(2);
   expect(log[0]).toMatchObject({ level: 'block', outcome: 'pending' });
   expect(log[0].streak).toBeGreaterThanOrEqual(20);
+});
+
+test.describe('with desktop notification permission', () => {
+  test.use({ notificationsGranted: true });
+
+  test('a sample and an automatic reminder both reach the Chrome notifications API', async () => {
+    expect(await options.evaluate(() => chrome.permissions.contains({ permissions: ['notifications'] }))).toBe(true);
+    const active = () => options.evaluate(async () => Object.keys(await chrome.notifications.getAll()));
+    await options.getByRole('button', { name: 'Test desktop notification' }).click();
+    await expect(options.getByText('Chrome accepted the test notification.', { exact: false })).toBeVisible();
+    const samples = await active();
+    expect(samples).toHaveLength(1);
+    expect(await send('GET_INTERVENTION_LOG')).toHaveLength(0);
+    expect((await send('GET_SETTINGS')).interventionEnabled).toBe(false);
+    await options.evaluate((id) => chrome.notifications.clear(id), samples[0]);
+
+    const now = Date.now();
+    await seedBaselineAndSession(now);
+    await options.reload();
+    await options.locator('label.toggle').filter({ hasText: 'Allow Doomscroll to interrupt me' }).click();
+    await expect.poll(async () => (await send('GET_SETTINGS')).interventionEnabled).toBe(true);
+    await seedSadRun(now, 0, 7);
+    const page = await feed();
+    await watchNext(page, 1);
+    await expect.poll(active).toHaveLength(1);
+    const [reminder] = await active();
+    expect(reminder).not.toBe(samples[0]);
+    await watchNext(page, 2);
+    const rows = await send('GET_INTERVENTION_LOG');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ level: 'notify', category: 'sad', streak: 8 });
+    expect(rows[0].deliveredAt).toBeGreaterThan(0);
+    expect(await active()).toEqual([reminder]);
+  });
 });
 
 test('tracking restarts after a persisted page restoration', async () => {

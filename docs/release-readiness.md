@@ -36,6 +36,19 @@ a mocked Instagram URL. They never log into Instagram or use personal data.
 No source-map, browser profile, test result, or private export belongs in a
 release archive.
 
+### Desktop reminder checks for the next release
+
+1. On a fresh install, use **Settings → Interventions → Test desktop notification**.
+   The sample should work with permission before a viewing baseline exists. Declining
+   permission should leave automatic reminders, history and cooldowns alone.
+2. With a valid baseline and reminders enabled, verify that a qualifying run reaches
+   Chrome's notification list once. The packaged browser test exercises this path
+   with a previously granted optional permission and synthetic reels.
+3. During the live beta, confirm the native permission prompt and whether a banner
+   or Notification Center entry appears on the tester's desktop. Record the OS,
+   Chrome version and Focus or Do Not Disturb setting if Chrome accepts a notification
+   but the tester cannot see it. Browser API acceptance alone cannot verify visibility.
+
 ## Live acceptance gate — partially verified
 
 The installed candidate now passes a [ten-view live capture smoke sample](live-capture-2026-10-30.md), with ten fiber-derived IDs and an exact capture-counter increase. A follow-up
