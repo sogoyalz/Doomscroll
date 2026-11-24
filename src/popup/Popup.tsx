@@ -180,6 +180,7 @@ export function Popup() {
   const [history, setHistory] = useState<DailyAggregate[]>([]);
   const [health, setHealth] = useState<ExtractionHealth | null>(null);
   const [tracking, setTracking] = useState(true);
+  const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [writeFailed, setWriteFailed] = useState(false);
   /** A control that did not do what it said, on a popup that still works. */
@@ -198,6 +199,7 @@ export function Popup() {
       setHistory(month);
       setHealth(extraction);
       setTracking(settings.trackingEnabled);
+      setRemindersEnabled(settings.interventionEnabled);
       setWriteFailed(failure !== null);
       setError(null);
     } catch (err) {
@@ -384,13 +386,15 @@ export function Popup() {
         <div className="strip-head">
           <span className="strip-label">Pattern detection</span>
           <span className="strip-value">
-            {degraded
-              ? 'needs attention'
-              : baselineReady
-                ? 'watching'
-                : readyDays < MIN_BASELINE_DAYS
-                  ? `${readyDays}/${MIN_BASELINE_DAYS} days`
-                  : 'more readable history needed'}
+            {!tracking
+              ? 'paused'
+              : degraded
+                ? 'needs attention'
+                : baselineReady
+                  ? 'watching'
+                  : readyDays < MIN_BASELINE_DAYS
+                    ? `${readyDays}/${MIN_BASELINE_DAYS} days`
+                    : 'more readable history needed'}
           </span>
         </div>
 
@@ -403,11 +407,15 @@ export function Popup() {
         )}
 
         <p className={`strip-note${degraded ? ' warn' : ''}`}>
-          {degraded
-            ? 'Instagram’s layout may have changed — these numbers are unreliable. See Settings.'
-            : baselineReady
-              ? 'Logging what it would flag. Nothing will interrupt you until you allow it in Settings.'
-              : 'Compares against your own normal, so it needs a week of history first.'}
+          {!tracking
+            ? 'Automatic reminders are paused while tracking is off.'
+            : degraded
+              ? 'Instagram’s layout may have changed — these numbers are unreliable. See Settings.'
+              : baselineReady
+                ? remindersEnabled
+                  ? 'Automatic reminders are on for the categories you selected in Settings.'
+                  : 'Automatic reminders are off. You can turn them on in Settings.'
+                : 'Compares against your own normal, so it needs a week of history first.'}
         </p>
       </section>
 

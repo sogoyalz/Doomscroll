@@ -304,6 +304,18 @@ async function seedSadRun(now, from, to) {
       authorHandle: 'synthetic_creator',
     });
 }
+
+test('popup shows whether automatic reminders are off, enabled, or paused', async () => {
+  await seedBaselineAndSession(Date.now());
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/src/popup/index.html`);
+  await expect(popup.getByText('Automatic reminders are off.', { exact: false })).toBeVisible();
+  await send('UPDATE_SETTINGS', { interventionEnabled: true });
+  await popup.reload();
+  await expect(popup.getByText('Automatic reminders are on', { exact: false })).toBeVisible();
+  await popup.getByRole('button', { name: 'Pause tracking' }).click();
+  await expect(popup.getByText('Automatic reminders are paused', { exact: false })).toBeVisible();
+});
 /** Scrolls to a reel and waits until the view that just ended is stored. */
 async function watchNext(page, index) {
   const before = (await events()).length;
