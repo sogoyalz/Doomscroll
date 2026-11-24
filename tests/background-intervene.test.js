@@ -37,6 +37,9 @@ globalThis.chrome = {
     },
   },
   notifications: {
+    async getPermissionLevel() {
+      return 'granted';
+    },
     async create(options) {
       notifications.push(options);
     },
@@ -229,6 +232,20 @@ describe('maybeIntervene', () => {
 
     warn.mockRestore();
     chrome.notifications.create = create;
+  });
+
+  it('leaves the notification available for retry when Chrome blocks delivery', async () => {
+    const permission = vi.spyOn(chrome.notifications, 'getPermissionLevel');
+    permission.mockResolvedValueOnce('denied');
+    try {
+      expect(await maybeIntervene(detection(), on, 'session-1', 1, NOW)).toBeNull();
+      expect(notifications).toHaveLength(0);
+      expect((await getInterventionLog())[0].deliveredAt).toBeNull();
+      expect((await readState()).firedInSession).toEqual([]);
+      expect(await maybeIntervene(detection(), on, 'session-1', 1, NOW + DELIVERY_RETRY_MS)).toBe('notify');
+    } finally {
+      permission.mockRestore();
+    }
   });
 });
 

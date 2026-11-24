@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { send } from '@shared/client.js';
+import { showDesktopNotification, type NotificationResult } from '@shared/desktop-notification.js';
 import type { ExportKind } from '@shared/messages.js';
 import { CHARGED_CATEGORIES } from '@shared/taxonomy.js';
 import {
@@ -46,6 +47,12 @@ import type {
 import './options.css';
 
 const LOG_LIMIT = 100;
+const notificationFeedback: Record<NotificationResult, string> = {
+  accepted: 'Chrome accepted the test notification. If you missed it, check your system notification settings for Chrome and any active Focus or Do Not Disturb mode.',
+  'permission-required': 'Allow the notification permission when prompted, then try again.',
+  blocked: 'Chrome reports that notifications are blocked. Check your notification settings and try again.',
+  failed: 'Chrome could not send the test notification. Check your notification settings and try again.',
+};
 
 function download(filename: string, contents: string): void {
   const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv' }));
@@ -67,6 +74,8 @@ export function Options() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   // Granted separately from install, so it has to be read rather than assumed.
   const [canNotify, setCanNotify] = useState(true);
+  const [testingNotification, setTestingNotification] = useState(false);
+  const [notificationResult, setNotificationResult] = useState<NotificationResult | null>(null);
   const [writeFailure, setWriteFailure] = useState<StorageFailure | null>(null);
   // Panels fail silently on purpose, so "empty" and "never arrived" look the
   // same in state. Anything that reads meaning into emptiness has to know
@@ -187,28 +196,37 @@ export function Options() {
     }
   }, []);
 
-  /**
-   * Turns interventions on, asking for the notification permission as it goes.
-   *
-   * Requested here rather than at install because this is the first moment it
-   * can be used, and because a permission on the install prompt costs more
-   * than one asked for in context. Must be called straight from the change
-   * event: Chrome only grants a request that comes from a user gesture.
-   *
-   * A refusal is not a failure. The other two rungs need no permission, so
-   * interventions still go on — the ladder simply starts at the full-screen
-   * prompt, and the note below says so rather than leaving a rung that looks
-   * enabled and silently does nothing.
-   */
+  // Call from the click handler while Chrome still recognizes the user gesture.
+  async function requestNotifications(): Promise<boolean> {
+    const allowed = await chrome.permissions.request({ permissions: ['notifications'] });
+    setCanNotify(allowed);
+    return allowed;
+  }
+
   async function enableInterventions(on: boolean): Promise<void> {
-    if (on) {
-      try {
-        setCanNotify(await chrome.permissions.request({ permissions: ['notifications'] }));
-      } catch {
-        setCanNotify(false);
-      }
-    }
+    if (on) await requestNotifications().catch(() => setCanNotify(false));
     await patch({ interventionEnabled: on });
+  }
+
+  async function testNotification(): Promise<void> {
+    setTestingNotification(true);
+    setNotificationResult(null);
+    try {
+      const allowed = await requestNotifications();
+      if (!allowed) {
+        setNotificationResult('permission-required');
+        return;
+      }
+      const result = await showDesktopNotification(
+        'Doomscroll notification test',
+        'This is a test of your desktop break reminders.',
+      );
+      setNotificationResult(result);
+    } catch {
+      setNotificationResult('failed');
+    } finally {
+      setTestingNotification(false);
+    }
   }
 
   if (error) return <div className="page empty">Couldn&rsquo;t load settings. {error}</div>;
@@ -336,13 +354,25 @@ export function Options() {
             Allow Doomscroll to interrupt me
             {settings.interventionEnabled && !canNotify && (
               <span className="fine">
-                Notifications are blocked, so the gentlest step can&rsquo;t run — the first
-                thing you&rsquo;ll see is the full-screen prompt, further into a run. Allow
-                notifications for this extension in Chrome to get the quieter nudge back.
+                Desktop notifications need permission. Use the test below to try again.
+                In-page prompts are still available.
               </span>
             )}
           </span>
         </label>
+        <button
+          className="action"
+          type="button"
+          disabled={testingNotification}
+          onClick={() => void testNotification()}
+        >
+          Test desktop notification
+        </button>
+        <p className="section-note" role="status">
+          {notificationResult
+            ? notificationFeedback[notificationResult]
+            : 'Sends one sample without changing automatic reminders or viewing history.'}
+        </p>
       </section>
 
       {interventions.length > 0 && (

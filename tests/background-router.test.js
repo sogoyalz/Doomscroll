@@ -56,7 +56,12 @@ globalThis.chrome = {
     },
     onChanged: { addListener() {} },
   },
-  notifications: { async create() {} },
+  notifications: {
+    async getPermissionLevel() {
+      return 'granted';
+    },
+    async create() {},
+  },
   tabs: { async sendMessage() {} },
 };
 

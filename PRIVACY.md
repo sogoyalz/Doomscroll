@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** 14 November 2026
+**Last updated:** 23 November 2026
 
 Doomscroll is a Chrome extension that tracks which Instagram Reels you watch
 and flags when the feed is serving you a repetitive stream of similar content.
@@ -58,7 +58,7 @@ exports.
 | `offscreen` | Run the bundled pretrained text model in a hidden extension document. No page capture, audio recording, or remote inference. |
 | `storage`                    | Save your settings and viewing history locally                                                                                                                                                                                                                                                                  |
 | `alarms`                     | Run daily maintenance (rolling up stats, deleting old data) — a Manifest V3 background worker is shut down when idle and cannot use timers for this                                                                                                                                                             |
-| `notifications` _(optional)_ | Show the gentlest break reminder. Requested only when you switch interventions on, never at install. Off by default, and unavailable until the extension has a week of your own history. Notifications are raised locally by the extension itself — nothing is pushed from a server, because there is no server |
+| `notifications` _(optional)_ | Show a desktop break reminder when you enable interventions, or a single sample when you choose **Test desktop notification** in versions with that control. Automatic reminders require a viewing baseline. The sample uses fixed text and creates no viewing or intervention record. |
 | `https://*.instagram.com/*`  | Read reel captions on the page. This is the only site the extension runs on                                                                                                                                                                                                                                     |
 
 ## How long data is kept

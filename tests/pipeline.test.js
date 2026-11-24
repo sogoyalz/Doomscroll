@@ -54,6 +54,9 @@ globalThis.chrome = {
     },
   },
   notifications: {
+    async getPermissionLevel() {
+      return 'granted';
+    },
     async create() {
       notifications.push(true);
       return 'notification';

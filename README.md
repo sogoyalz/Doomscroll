@@ -364,7 +364,7 @@ behavior for those inputs, not compatibility with every live layout.
 | No reels recorded                    | Load `dist/`, enable tracking, refresh Instagram after extension reload, and stay on a reel longer than 250 ms before moving on.                            |
 | Pattern detection is still learning  | It needs seven nonempty historical days and enough charged samples within the trailing fourteen days; today does not count toward that baseline.            |
 | No prompt despite a detected pattern | Check opt-in, the selected categories, streak length, current break, per-session limits, and cooldowns.                                                     |
-| Notifications do not appear          | Check the extension's optional notification permission and browser/OS notification settings. Stronger prompts can still be available.                       |
+| Notifications do not appear          | In Settings → Interventions, click **Test desktop notification**. You can run the test before you have a viewing baseline. If Chrome accepts it but no banner appears, check system notification settings for Chrome and Focus or Do Not Disturb. |
 | Missing audio or reel identities     | A notice appears on the page when identity cannot be read. Settings still has the full extraction health. Some reels simply have no caption or song credit. |
 | Stats say saves are failing          | Inspect the storage warning and extension service-worker errors. Available disk/storage and extension reloads can affect persistence.                       |
 | Old behavior after an update         | Rebuild, reload the extension, and refresh open Instagram tabs.                                                                                             |

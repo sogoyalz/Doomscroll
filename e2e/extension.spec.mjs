@@ -142,6 +142,19 @@ test('reminders can be switched off after their baseline expires', async () => {
   await expect(toggle).toBeDisabled();
 });
 
+test('a declined desktop notification test leaves automatic reminders and history alone', async () => {
+  // The optional-permission dialog is browser UI. Simulate declining it in this page only.
+  await options.evaluate(() => {
+    chrome.permissions.request = async () => false;
+  });
+  const button = options.getByRole('button', { name: 'Test desktop notification' });
+  await button.click();
+  await expect(options.getByRole('status').filter({ hasText: 'Allow the notification permission' })).toBeVisible();
+  await expect(button).toBeEnabled();
+  expect((await send('GET_SETTINGS')).interventionEnabled).toBe(false);
+  expect(await send('GET_INTERVENTION_LOG')).toHaveLength(0);
+});
+
 test('real content scripts record scrolling, extract audio, and respect SPA privacy exclusions', async () => {
   await send('UPDATE_SETTINGS', { debugHud: true });
   const page = await feed();

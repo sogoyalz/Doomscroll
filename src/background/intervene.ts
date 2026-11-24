@@ -7,6 +7,7 @@
 // preserving now that acting is wired up.
 
 import { getInterventionById, putInterventionLog } from './db.js';
+import { showDesktopNotification } from '@shared/desktop-notification.js';
 import {
   BREAK_DESTINATION,
   BREAK_KEY,
@@ -165,33 +166,9 @@ function notificationText(detection: PatternDetection): string {
   );
 }
 
-/**
- * Raises the gentlest rung, if it is available.
- *
- * `notifications` is an optional permission, requested when the user switches
- * interventions on rather than at install — the install prompt is where
- * permissions cost the most, and this one is unused by default and unusable
- * until a week of history exists. So `chrome.notifications` may simply not be
- * there, which is a decision the user made and not a fault.
- */
 async function notify(detection: PatternDetection): Promise<boolean> {
-  if (!chrome.notifications) return false;
-
-  try {
-    await chrome.notifications.create({
-      type: 'basic',
-      iconUrl: chrome.runtime.getURL('assets/icons/icon128.png'),
-      title: 'Your feed has narrowed',
-      message: notificationText(detection),
-      // Not silent, but not requiring interaction either: a notification the
-      // user must dismiss is a second interruption on top of the first.
-      requireInteraction: false,
-    });
-    return true;
-  } catch (err) {
-    console.warn('Doomscroll: notification failed', err);
-    return false;
-  }
+  const result = await showDesktopNotification('Your feed has narrowed', notificationText(detection));
+  return result === 'accepted';
 }
 
 async function sendToTab(
