@@ -379,7 +379,8 @@ export function Options() {
         <section className="section">
           <h2 className="section-label">Intervention history</h2>
           <p className="section-note">
-            These counts include delivered prompts and your responses. Failed deliveries are
+            The latest {LOG_LIMIT} attempts are included. Desktop delivery means Chrome accepted
+            the notification. In-page delivery means the prompt rendered. Failed deliveries are
             excluded; older records without delivery information are included. “No early end
             recorded” means this extension did not receive a request to end the break early; it
             does not prove you stopped scrolling or measure activity on another device. These
@@ -396,7 +397,7 @@ export function Options() {
               <thead>
                 <tr>
                   <th>Level</th>
-                  <th className="num">Shown</th>
+                  <th className="num">Delivered or legacy</th>
                   <th className="num">Took a break</th>
                   <th className="num">Dismissed</th>
                   <th className="num">No recorded response</th>
