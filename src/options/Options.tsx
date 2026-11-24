@@ -238,7 +238,7 @@ export function Options() {
   // flag to go stale.
   const interventionSummary = summarizeInterventions(interventions);
   const failedDeliveries = interventions.filter((entry) => entry.deliveredAt === null).length;
-  const brandNew = panelsFailed === 0 && log.length === 0 && daily.length === 0;
+  const brandNew = panelsFailed === 0 && log.length === 0 && !daily.some((day) => day.totalReels > 0);
   const readiness = baselineStatus(daily);
   const baselineReady = readiness.ready;
   const drifting = health ? isDrifting(health) : false;

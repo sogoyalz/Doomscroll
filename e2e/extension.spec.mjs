@@ -641,3 +641,14 @@ test('bundled trained model classifies new views without a network service', asy
   await options.reload();
   await expect(engine).toHaveValue('local-ml');
 });
+
+test('welcome survives empty daily summaries and retires after the first view', async () => {
+  await send('GET_STATS', { range: 'today' });
+  await options.reload();
+  await expect(options.locator('.welcome')).toBeVisible();
+  const page = await feed();
+  await watchNext(page, 1);
+  await options.reload();
+  await expect(options.getByLabel('Record the reels I watch')).toBeVisible();
+  await expect(options.locator('.welcome')).toHaveCount(0);
+});
