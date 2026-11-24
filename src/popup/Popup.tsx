@@ -6,6 +6,7 @@
 // be a statement about the user, and this data cannot carry it.
 
 import { useCallback, useEffect, useState } from 'react';
+import { TIME_REMINDER_KEY, readTimeBudget, type TimeBudget } from '@shared/time-reminder.js';
 import { send } from '@shared/client.js';
 import { UNCLASSIFIED } from '@shared/aggregation.js';
 import { isCharged } from '@shared/taxonomy.js';
@@ -179,6 +180,8 @@ export function Popup() {
   const [days, setDays] = useState<DailyAggregate[] | null>(null);
   const [history, setHistory] = useState<DailyAggregate[]>([]);
   const [health, setHealth] = useState<ExtractionHealth | null>(null);
+  const [limit, setLimit] = useState(0);
+  const [budget, setBudget] = useState<TimeBudget>();
   const [tracking, setTracking] = useState(true);
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,6 +202,9 @@ export function Popup() {
       setHistory(month);
       setHealth(extraction);
       setTracking(settings.trackingEnabled);
+      setLimit(settings.timeReminderMinutes);
+      const state = readTimeBudget((await chrome.storage.local.get(TIME_REMINDER_KEY))[TIME_REMINDER_KEY]);
+      setBudget(state && Date.now() - state.lastEnd <= settings.sessionGapThresholdMs ? state : undefined);
       setRemindersEnabled(settings.interventionEnabled);
       setWriteFailed(failure !== null);
       setError(null);
@@ -301,6 +307,22 @@ export function Popup() {
         </div>
       )}
 
+      {limit > 0 && tracking && (
+        <section className="strip">
+          <span className="strip-label">Reels time reminder</span>
+          <p>{budget?.delivered ? 'Session reminder delivered' :
+            `${Math.ceil(Math.max(0, (budget?.targetMs ?? limit * 60000) - (budget?.spentMs ?? 0)) / 60000)} active minutes remaining`}</p>
+          {budget?.delivered && budget.reminderId && (
+            <button className="link" onClick={async () => {
+              try {
+                const snoozed = await send('TIME_RESPONSE', { id: budget.reminderId!, action: 'snooze' });
+                if (!snoozed) setActionError('This session reminder has expired.');
+                await load();
+              } catch { setActionError('Could not snooze the reminder. Please try again.'); }
+            }}>Snooze 5 minutes</button>
+          )}
+        </section>
+      )}
       {totals.reels === 0 ? (
         <div className="state">
           <strong>Nothing tracked yet</strong>

@@ -666,3 +666,44 @@ for (const landing of ['/direct/inbox/', '/accounts/edit/']) {
     expect(await events()).toHaveLength(1);
   });
 }
+
+async function nearFirstReminder() {
+  await options.evaluate(() => { chrome.permissions.request = async () =>
+    chrome.permissions.contains({ permissions: ['notifications'] }); });
+  await options.getByLabel('Remind me after').selectOption('1');
+  await expect.poll(async () => (await send('GET_SETTINGS')).timeReminderMinutes).toBe(1);
+  await options.evaluate(() => chrome.storage.local.set({
+    'doomscroll:timeReminder': {
+      limitMinutes: 1, spentMs: 58000, targetMs: 60000,
+      lastEnd: Date.now(), reminderId: null, delivered: false,
+    },
+  }));
+  const page = await feed();
+  await page.bringToFront();
+  return page;
+}
+
+test('first-session time limit opens an in-feed reminder and snoozes without a baseline', async () => {
+  const page = await nearFirstReminder();
+  const dialog = page.getByRole('dialog', { name: 'Time for your Reels break?' });
+  await expect(dialog).toBeVisible({ timeout: 15000 });
+  await expect(dialog).toContainText('1 minute of active Reel time');
+  await dialog.getByRole('button', { name: 'Snooze 5 minutes' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => options.evaluate(async () => {
+    const state = (await chrome.storage.local.get('doomscroll:timeReminder'))['doomscroll:timeReminder'];
+    return [state.delivered, state.targetMs - state.spentMs];
+  })).toEqual([false, 300000]);
+  expect(await send('GET_INTERVENTION_LOG')).toHaveLength(0);
+});
+
+test.describe('first-session desktop timer', () => {
+  test.use({ notificationsGranted: true });
+  test('Chrome accepts the timer without pattern reminders or viewing history', async () => {
+    const page = await nearFirstReminder();
+    await expect.poll(() => options.evaluate(async () => Object.keys(await chrome.notifications.getAll()).length),
+      { timeout: 15000 }).toBe(1);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(await send('GET_INTERVENTION_LOG')).toHaveLength(0);
+  });
+});

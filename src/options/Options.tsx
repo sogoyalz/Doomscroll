@@ -324,6 +324,26 @@ export function Options() {
           to new views. Model failures fall back to rules and are marked in session reviews.
         </p>
       </section>
+      <section className="section">
+        <h2 className="section-label">Reels time reminder</h2>
+        <label>
+          Remind me after{' '}
+          <select value={settings.timeReminderMinutes} onChange={(event) => {
+            const minutes = Number(event.target.value);
+            if (minutes) void requestNotifications().catch(() => setCanNotify(false));
+            void patch({ timeReminderMinutes: minutes });
+          }}>
+            <option value={0}>Off — just track</option>
+            {[1, 5, 10, 15, 30, 60].map((minutes) =>
+              <option key={minutes} value={minutes}>{minutes} minute{minutes === 1 ? '' : 's'}</option>)}
+          </select>
+        </label>
+        <p className="section-note">
+          Works from your first session. Only time on a visible Reel in the focused window counts.
+          Chrome sends one desktop reminder per session. If notifications are blocked, the reminder
+          appears in the feed. You can snooze for five more active minutes.
+        </p>
+      </section>
       <ExtractionHealthPanel health={health} />
 
       <section className="section">

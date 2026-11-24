@@ -129,6 +129,7 @@ function mergeSettings(base: UserSettings, patch: unknown): UserSettings {
     ...merged,
     trackingEnabled: bool(merged.trackingEnabled, DEFAULT_SETTINGS.trackingEnabled),
     interventionEnabled: bool(merged.interventionEnabled, DEFAULT_SETTINGS.interventionEnabled),
+    timeReminderMinutes: Math.round(clamp(merged.timeReminderMinutes, { min: 0, max: 180 }, 0)),
     debugHud: bool(merged.debugHud, DEFAULT_SETTINGS.debugHud),
     classificationMode: MODES.includes(merged.classificationMode)
       ? merged.classificationMode

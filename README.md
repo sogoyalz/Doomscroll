@@ -66,6 +66,7 @@ history, extraction health, and CSV exports.
 | Understand your feed    | Browse category breakdowns, daily trends, sessions, and creator statistics.                   |
 | Spot unusual repetition | Compare recent content with a recency-weighted baseline from your own previous fourteen days. |
 | Choose interruptions    | Enable notifications, full-screen prompts, or prompts with a short dismissal delay.           |
+| Reels time reminder      | Choose an active viewing limit from day one, with desktop or in-feed delivery and a five-minute snooze. |
 | Take a break            | Leave the Reels feed and receive a reminder if you return during a fifteen-minute break.      |
 | Inspect decisions       | See detection reasons, delivered prompts, responses, and failed delivery counts.              |
 | Diagnose extraction     | A page notice when reel identity cannot be read, plus health details in Settings.             |

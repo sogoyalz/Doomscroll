@@ -42,13 +42,13 @@ export function Alerts({
             machine.
           </p>
           <p>
-            It will look idle for about a week, and that is the design. It flags a category only
+            Choose a Reels time reminder below for your first session. Pattern detection flags a category only
             when it runs well above <em>your own</em> usual rate for it, so it needs to learn
             your usual rate first. A fixed threshold would spend that week accusing you of a
             problem it had no way to measure.
           </p>
           <p>
-            Nothing will interrupt you unless you switch it on below, and that switch stays
+            Personalized pattern reminders are optional, and their switch stays
             disabled until the baseline exists. Come back in a few days and the popup will show
             how far along it is.
           </p>

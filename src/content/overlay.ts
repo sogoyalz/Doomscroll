@@ -34,6 +34,7 @@ interface OverlayOptions {
   category: string | null;
   streak: number;
   onDismiss: (action: DismissAction) => void;
+  timeLimit?: { minutes: number; onSnooze: () => void };
 }
 
 let host: HTMLElement | null = null;
@@ -193,11 +194,15 @@ export function showOverlay(options: OverlayOptions): void {
   card.setAttribute('aria-modal', 'true');
 
   const heading = document.createElement('h2');
-  heading.textContent = 'Your feed has locked onto one thing';
+  heading.textContent = options.timeLimit ? 'Time for your Reels break?' : 'Your feed has locked onto one thing';
+  heading.id = 'reminder-title';
+  card.setAttribute('aria-labelledby', heading.id);
 
   const body = document.createElement('p');
   // textContent throughout: the category is derived from scraped text.
-  body.textContent = describe(options.category, options.streak);
+  body.textContent = options.timeLimit
+    ? `You reached ${options.timeLimit.minutes} minute${options.timeLimit.minutes === 1 ? '' : 's'} of active Reel time.`
+    : describe(options.category, options.streak);
 
   const actions = document.createElement('div');
   actions.className = 'actions';
@@ -214,6 +219,14 @@ export function showOverlay(options: OverlayOptions): void {
   });
 
   actions.append(take, keep);
+  if (options.timeLimit) {
+    const snooze = document.createElement('button');
+    snooze.className = 'secondary';
+    snooze.textContent = 'Snooze 5 minutes';
+    const { onSnooze } = options.timeLimit;
+    snooze.addEventListener('click', () => { hideOverlay(); onSnooze(); });
+    actions.append(snooze);
+  }
   card.append(heading, body, actions);
 
   if (options.level === 'block') {

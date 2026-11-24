@@ -22,7 +22,7 @@ Each must match `manifest.json` exactly. Copy verbatim into the form.
 | `offscreen` | Runs the bundled pretrained text model in a hidden extension document. All inference is local; no screen or audio capture. |
 | `storage`                   | Saves the user's settings and their local viewing history. No data leaves the device.                                                                                                                                                                                                                              |
 | `alarms`                    | Runs daily maintenance — rolling up statistics and deleting history older than 90 days. A Manifest V3 service worker is terminated when idle and cannot use `setTimeout` for scheduled work, so alarms are the only mechanism available.                                                                           |
-| `notifications` (optional) | Shows local desktop reminders when the user enables interventions and their viewing history supports a detection. In versions with a notification test, the user can also request one sample from Settings. |
+| `notifications` (optional) | Shows local desktop reminders when the user enables interventions and their viewing history supports a detection, or when they reach a Reels time limit they chose. The time limit works from the first session. In versions with a notification test, the user can also request one sample from Settings. |
 | `https://*.instagram.com/*` | Reads the caption, hashtags, and audio name of the reel currently on screen in order to categorise it. This is the only site the extension runs on, and it is excluded from `/direct/` and `/accounts/`.                                                                                                           |
 
 **Remote code:** none. Everything executes from the packaged bundle; the
@@ -51,6 +51,8 @@ are rejected.
 **Detailed description:**
 
 > Doomscroll records which Instagram Reels you watch and how long each one stays on screen. It groups them into 21 text-based categories and shows the mix.
+>
+> Choose a Reels time limit to get a break reminder from your first session. The timer counts active viewing and offers a five-minute snooze.
 >
 > It also watches for a run of one category that is unusual compared with your own recent history. It needs about a week of that history before it will say so, and it says when it is still learning. Interruptions are off until you turn them on.
 >

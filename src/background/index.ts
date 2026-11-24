@@ -59,6 +59,9 @@ import {
   DISCARD_VIEWS_BEFORE_KEY,
 } from '@shared/pending-views.js';
 
+import { tickBudget, respondToTimer } from './time-reminder.js';
+import { TIME_REMINDER_KEY } from '@shared/time-reminder.js';
+
 const serializeHistory = createSerialQueue();
 
 const PRUNE_ALARM = 'doomscroll:prune';
@@ -86,6 +89,14 @@ type HandlerMap = {
 };
 
 const handlers: HandlerMap = {
+  async TIME_TICK({ start, end }, sender) {
+    if (sender.tab?.id === undefined || !sender.url?.startsWith('https://www.instagram.com/')) return false;
+    await tickBudget(sender.tab.id, start, end);
+    return true;
+  },
+  async TIME_RESPONSE({ id, action }) {
+    return respondToTimer(id, action);
+  },
   async GET_SESSION_ID({ startedAt, endedAt }) {
     if (
       !Number.isFinite(startedAt) ||
@@ -250,6 +261,9 @@ const handlers: HandlerMap = {
   async UPDATE_SETTINGS(payload) {
     const before = await getSettings();
     const after = await updateSettings(payload);
+    if (!after.trackingEnabled || after.timeReminderMinutes !== before.timeReminderMinutes) {
+      await chrome.storage.local.remove(TIME_REMINDER_KEY);
+    }
     if (!after.trackingEnabled) {
       await chrome.storage.local.set({ [DISCARD_VIEWS_BEFORE_KEY]: Date.now() });
       await clearPendingViews();
@@ -357,6 +371,7 @@ const handlers: HandlerMap = {
     await clearPendingViews();
     await chrome.storage.local.remove([
       SESSION_KEY,
+      TIME_REMINDER_KEY,
       'doomscroll:interventionState',
       'doomscroll:interventionRetryAfter',
     ]);
@@ -388,6 +403,8 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
   const contentCommands = new Set([
     'GET_SETTINGS',
     'GET_SESSION_ID',
+    'TIME_TICK',
+    'TIME_RESPONSE',
     'REEL_VIEW_LOGGED',
     'EXTRACTION_OBSERVED',
     'INTERVENTION_DISMISSED',

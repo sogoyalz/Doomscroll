@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   // act. Falling back to a fixed threshold during the cold-start window would
   // reintroduce exactly the false positives the baseline exists to avoid.
   interventionEnabled: false,
+  timeReminderMinutes: 0,
 
   // A diagnostic surface, not a feature. Off unless someone is deliberately
   // running a live validation session.

@@ -44,6 +44,7 @@ import { noteStorageFailure } from '@shared/storage-health.js';
 import { deliverReelView } from '@shared/deliver-view.js';
 import { syncLayoutWarning } from './layout-warning.js';
 import { getSettings, SETTINGS_KEY } from '@shared/settings.js';
+import { SAMPLE_MS, TIME_REMINDER_KEY, readTimeBudget } from '@shared/time-reminder.js';
 import { send } from '@shared/client.js';
 import type { ExtensionMessage } from '@shared/messages.js';
 import type { NewReelEvent } from '@shared/types.js';
@@ -83,6 +84,30 @@ let syncScheduled = false;
 let observing = false;
 let unloaded = false;
 let trackingEnabled = false;
+let limitMinutes = 0;
+let timeDialogId: string | null = null;
+let activeSince: number | null = null;
+
+function timerEligible(): boolean {
+  return limitMinutes > 0 && observing && !unloaded && !document.hidden && document.hasFocus() &&
+    isTrackingSurface(location.pathname) && tracker.currentTarget() !== null && !isOverlayShowing() &&
+    !(activeBreak && Date.now() < activeBreak.endsAt);
+}
+
+// Flush on blur/hide as well as heartbeat, so short foreground visits count.
+// Discard long gaps left by a sleeping device.
+function syncTimeBudget(now: number): void {
+  const eligible = timerEligible();
+  if (activeSince !== null && (!eligible || now - activeSince >= SAMPLE_MS)) {
+    const start = activeSince;
+    activeSince = null;
+    if (now > start && now - start <= SAMPLE_MS * 2 && trackingEnabled && isTrackingSurface(location.pathname)) {
+      void send('TIME_TICK', { start, end: now }).catch(() => undefined);
+    }
+  }
+  if (eligible) activeSince ??= now;
+}
+
 
 /**
  * Coalesces sync requests into one per frame.
@@ -299,11 +324,13 @@ function startObserving(): void {
  */
 function stopObserving(): void {
   syncLayoutWarning(false);
+  activeSince = null;
   if (!observing) return;
   observing = false;
 
   // An interruption outliving the tracking it was about would be a dialog the
   // user cannot explain and the extension is no longer entitled to show.
+  timeDialogId = null;
   hideOverlay();
   const previous = tracker.currentTarget();
   if (previous) snapshots.delete(previous);
@@ -323,6 +350,8 @@ function stopObserving(): void {
 
 async function applyTrackingSetting(): Promise<void> {
   const settings = await getSettings();
+  if (limitMinutes !== settings.timeReminderMinutes || !settings.trackingEnabled) activeSince = null;
+  limitMinutes = settings.timeReminderMinutes;
   trackingEnabled = settings.trackingEnabled;
   const { debugHud } = settings;
   if (debugHud) {
@@ -360,6 +389,7 @@ async function applyTrackingSetting(): Promise<void> {
  * background tab must not restart the clock while the prompt is still up.
  */
 function syncDwellClock(now: number = Date.now()): void {
+  syncTimeBudget(now);
   if (document.hidden || isOverlayShowing()) tracker.pause(now);
   else tracker.resume(now);
 }
@@ -373,6 +403,7 @@ function syncDwellClock(now: number = Date.now()): void {
  * does not lock anyone out.
  */
 function leaveTheFeed(): void {
+  timeDialogId = null;
   hideOverlay();
   // The worker also names a destination. Navigation is the one side effect
   // that moves the person, so it stays pinned to the known Instagram home
@@ -494,6 +525,8 @@ function start(): void {
   };
   let heartbeat = setInterval(onHeartbeat, HEARTBEAT_MS);
 
+  window.addEventListener('focus', () => syncTimeBudget(Date.now()));
+  window.addEventListener('blur', () => syncTimeBudget(Date.now()));
   document.addEventListener('visibilitychange', () => syncDwellClock());
 
   // React to the pause switch being flipped from the popup or options page,
@@ -504,6 +537,12 @@ function start(): void {
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+    if (timeDialogId && changes[TIME_REMINDER_KEY] &&
+        readTimeBudget(changes[TIME_REMINDER_KEY].newValue)?.reminderId !== timeDialogId) {
+      hideOverlay();
+      timeDialogId = null;
+      syncDwellClock();
+    }
     if (changes[SETTINGS_KEY]) void applyTrackingSetting();
     // A break started in this tab, or in another one — either way this tab
     // should honour it, which is the point of keeping the state in storage
@@ -516,6 +555,38 @@ function start(): void {
     }
   });
 
+  chrome.runtime.onMessage.addListener((message, sender, respond) => {
+    if (sender.id !== chrome.runtime.id) return false;
+    if (message?.type === 'TIME_REMINDER_READY') {
+      respond(timerEligible());
+      return false;
+    }
+    if (message?.type !== 'SHOW_TIME_REMINDER') return false;
+    if (!timerEligible()) {
+      respond(false);
+      return false;
+    }
+    const id: string = message.id;
+    timeDialogId = id;
+    showOverlay({
+      level: 'overlay', streak: 0, category: null,
+      timeLimit: { minutes: message.minutes, onSnooze: () => {
+        timeDialogId = null;
+        syncDwellClock();
+        void send('TIME_RESPONSE', { id, action: 'snooze' }).catch(() => undefined);
+      } },
+      onDismiss: (action) => {
+        timeDialogId = null;
+        syncDwellClock();
+        if (action === 'accepted') {
+          void send('TIME_RESPONSE', { id, action: 'break' }).catch(() => false).finally(leaveTheFeed);
+        }
+      },
+    });
+    syncDwellClock();
+    respond(true);
+    return false;
+  });
   // The one message that arrives rather than leaves. Everything else in this
   // file reports outward; interruptions are decided in the worker, which owns
   // the history and the cooldowns, and only the rendering happens here.
@@ -599,6 +670,7 @@ function start(): void {
   // pagehide fires for bfcache navigations where beforeunload does not.
   window.addEventListener('pagehide', () => {
     unloaded = true;
+    syncTimeBudget(Date.now());
     tracker.flush(Date.now());
     stopObserving();
     clearInterval(heartbeat);

@@ -76,6 +76,7 @@ export interface UserSettings {
    */
   trackingEnabled: boolean;
   interventionEnabled: boolean;
+  timeReminderMinutes: number;
   /**
    * Renders the on-page diagnostic panel while scrolling Instagram.
    *

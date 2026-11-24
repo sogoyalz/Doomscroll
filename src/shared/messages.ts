@@ -25,6 +25,8 @@ import type { AuthorBreakdown, SessionSummary } from './insights.js';
 export type ExportKind = 'reels' | 'detection' | 'interventions';
 
 export type ExtensionMessage =
+  | { type: 'TIME_TICK'; payload: { start: number; end: number } }
+  | { type: 'TIME_RESPONSE'; payload: { id: string; action: 'snooze' | 'break' } }
   | { type: 'REVIEW_REEL'; payload: { id: string; topic: string | null; tone: string | null } }
   | { type: 'GET_SESSION_ID'; payload: { startedAt: number; endedAt: number } }
   | { type: 'REEL_VIEW_LOGGED'; payload: NewReelEvent }
@@ -87,6 +89,8 @@ export type MessageResult<T> = { ok: true; data: T } | { ok: false; error: strin
 
 // Response shape per route, so senders get a typed result back.
 export interface MessageResponses {
+  TIME_TICK: boolean;
+  TIME_RESPONSE: boolean;
   REVIEW_REEL: ReelEvent;
   GET_SESSION_ID: { id: string };
   REEL_VIEW_LOGGED: { queued: boolean };
