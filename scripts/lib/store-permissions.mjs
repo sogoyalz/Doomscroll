@@ -79,12 +79,7 @@ export function auditStorePermissions({ manifest, sources }) {
   }
 
   for (const script of manifest.content_scripts ?? []) {
-    const excluded = script.exclude_matches ?? [];
-    for (const path of ['/direct/', '/accounts/']) {
-      if (!excluded.some((match) => match.includes(path))) {
-        problems.push(`content script is missing an exclusion for ${path}`);
-      }
-    }
+    if (!sameSet(script.matches, HOST_PERMISSIONS)) problems.push('unexpected content script hosts');
   }
   return problems;
 }
@@ -94,5 +89,11 @@ export function auditSourceTree(manifest, sourceRoot) {
     path,
     text: readFileSync(path, 'utf8'),
   }));
-  return auditStorePermissions({ manifest, sources });
+  const problems = auditStorePermissions({ manifest, sources });
+  for (const entry of ['index.ts', 'main-world.ts']) {
+    if (!readFileSync(join(sourceRoot, 'content', entry), 'utf8').trimEnd().endsWith('startOnTrackingSurface(start);')) {
+      problems.push('content entry must defer startup on private routes: ' + entry);
+    }
+  }
+  return problems;
 }

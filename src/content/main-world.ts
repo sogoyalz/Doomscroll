@@ -21,6 +21,7 @@ import {
   SHORTCODE_ATTR,
   SHORTCODE_SRC_ATTR,
   trackingPaused,
+  startOnTrackingSurface,
   TRACKING_ATTR,
   VIDEO_PLAYER_SELECTOR,
 } from './dom.js';
@@ -226,4 +227,4 @@ function start(): void {
   }, RETAG_INTERVAL_MS);
 }
 
-start();
+startOnTrackingSurface(start);

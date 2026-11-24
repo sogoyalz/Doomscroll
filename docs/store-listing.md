@@ -54,7 +54,7 @@ are rejected.
 >
 > It also watches for a run of one category that is unusual compared with your own recent history. It needs about a week of that history before it will say so, and it says when it is still learning. Interruptions are off until you turn them on.
 >
-> Nothing is sent anywhere. There is no account, no server, and no analytics. The extension does not run on Instagram direct messages or account settings, and it does not read your login or cookies.
+> Nothing is sent anywhere. There is no account, no server, and no analytics. Tracking is disabled on Instagram direct messages and account settings, and it does not read your login or cookies.
 >
 > You can pause tracking, export your history as CSV, or delete it. Raw reel history is removed after 90 days.
 >

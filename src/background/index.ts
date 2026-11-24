@@ -397,11 +397,15 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
   let instagramContent = false;
   try {
     const url = new URL(sender.url ?? '');
+    // Chrome retains the original document URL across same-document navigation.
+    // Only the top frame can use its tab's current location.
+    const current = sender.frameId === 0 && sender.tab?.url ? new URL(sender.tab.url) : url;
     instagramContent =
       sender.id === chrome.runtime.id &&
       sender.tab?.id !== undefined &&
       url.origin === 'https://www.instagram.com' &&
-      !/^\/(direct|accounts)(\/|$)/.test(url.pathname);
+      current.origin === url.origin &&
+      !/^\/(direct|accounts)(\/|$)/.test(current.pathname);
   } catch {
     /* Missing or malformed sender URLs are untrusted. */
   }

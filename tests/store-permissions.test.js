@@ -7,10 +7,7 @@ const manifest = {
   host_permissions: ['https://*.instagram.com/*'],
   content_scripts: [
     {
-      exclude_matches: [
-        'https://*.instagram.com/direct/*',
-        'https://*.instagram.com/accounts/*',
-      ],
+      matches: ['https://*.instagram.com/*'],
     },
   ],
 };
@@ -61,11 +58,11 @@ describe('store permission audit', () => {
     expect(problems).toEqual([]);
   });
 
-  it('rejects a content script that still runs in Direct', () => {
+  it('rejects content scripts on other sites', () => {
     const problems = auditStorePermissions({
-      manifest: { ...manifest, content_scripts: [{ exclude_matches: [] }] },
+      manifest: { ...manifest, content_scripts: [{ matches: ['<all_urls>'] }] },
       sources,
     });
-    expect(problems.some((problem) => problem.includes('/direct/'))).toBe(true);
+    expect(problems.some((problem) => problem.includes('hosts'))).toBe(true);
   });
 });

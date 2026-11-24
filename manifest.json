@@ -18,19 +18,11 @@
   "content_scripts": [
     {
       "matches": ["https://*.instagram.com/*"],
-      "exclude_matches": [
-        "https://*.instagram.com/direct/*",
-        "https://*.instagram.com/accounts/*"
-      ],
       "js": ["src/content/index.ts"],
       "run_at": "document_idle"
     },
     {
       "matches": ["https://*.instagram.com/*"],
-      "exclude_matches": [
-        "https://*.instagram.com/direct/*",
-        "https://*.instagram.com/accounts/*"
-      ],
       "js": ["src/content/main-world.ts"],
       "run_at": "document_idle",
       "world": "MAIN"

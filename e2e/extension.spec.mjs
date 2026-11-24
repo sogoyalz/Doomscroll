@@ -652,3 +652,17 @@ test('welcome survives empty daily summaries and retires after the first view', 
   await expect(options.getByLabel('Record the reels I watch')).toBeVisible();
   await expect(options.locator('.welcome')).toHaveCount(0);
 });
+
+for (const landing of ['/direct/inbox/', '/accounts/edit/']) {
+  test('starts tracking after leaving ' + landing + ' without a document reload', async () => {
+    const page = await context.newPage();
+    await page.goto('https://www.instagram.com' + landing);
+    await page.waitForTimeout(1200);
+    await expect(page.locator('[data-reel-watch], [data-reel-code]')).toHaveCount(0);
+    expect(await events()).toHaveLength(0);
+    await page.evaluate(() => history.pushState({}, '', '/reels/synthetic/'));
+    await expect(page.locator('[data-reel-code]').first()).toHaveAttribute('data-reel-code', 'SYNTHETIC00');
+    await watchNext(page, 1);
+    expect(await events()).toHaveLength(1);
+  });
+}

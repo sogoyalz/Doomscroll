@@ -45,8 +45,8 @@ exports.
 ## What is not stored
 
 - No screenshots, images, video, or audio
-- No direct messages — the extension does not run on `/direct/`
-- No account credentials — it does not run on `/accounts/` either, and never
+- No direct messages — tracking stays off on `/direct/`; a navigation listener can start it after you leave
+- No account credentials — tracking stays off on `/accounts/` too, and never
   reads form fields, cookies, or your Instagram login
 - No browsing history outside instagram.com
 - Nothing at all from any other website

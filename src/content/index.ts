@@ -13,6 +13,7 @@ import {
   bridgeStatus,
   findReelContainers,
   findScrollContainer,
+  startOnTrackingSurface,
   TRACKING_ATTR,
   isTrackingSurface,
 } from './dom.js';
@@ -610,4 +611,4 @@ function start(): void {
   void applyTrackingSetting();
 }
 
-start();
+startOnTrackingSurface(start);

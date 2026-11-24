@@ -90,9 +90,24 @@ export function trackingPaused(doc: Document = document): boolean {
   );
 }
 
-/** Manifest exclusions only apply to a fresh load; SPA navigations need this too. */
+/** Never observe private routes, including same-document navigations. */
 export function isTrackingSurface(pathname: string): boolean {
   return !/^\/(?:direct|accounts)(?:\/|$)/.test(pathname);
+}
+
+/** A document opened in Direct can later become a Reels feed without a reload. */
+export function startOnTrackingSurface(start: () => void): void {
+  if (isTrackingSurface(location.pathname)) {
+    start();
+    return;
+  }
+  const navigation = (window as Window & { navigation?: EventTarget }).navigation;
+  const activate = () => {
+    if (!isTrackingSurface(location.pathname)) return;
+    navigation?.removeEventListener('currententrychange', activate);
+    start();
+  };
+  navigation?.addEventListener('currententrychange', activate);
 }
 
 // The author link sits a few levels above the video player; 12 is well clear
