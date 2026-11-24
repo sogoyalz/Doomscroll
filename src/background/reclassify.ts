@@ -14,7 +14,7 @@ import { aggregateDay, groupByLocalDay } from '@shared/aggregation.js';
 import { LEXICON_VERSION } from '@shared/lexicon.js';
 import type { ReelEvent, UserSettings } from '@shared/types.js';
 
-const LEXICON_VERSION_KEY = 'doomscroll:lexiconVersion';
+const LEXICON_VERSION_KEY = 'doomscroll:lexiconVersionWithSummaries';
 
 /**
  * Re-scores every stored event and rebuilds the affected daily aggregates.
@@ -91,14 +91,12 @@ export async function reclassifyAll(
   // pass retrying forever without ever finishing.
   await putReelEvents(rewrites);
 
-  if (rewrites.length) {
-    // Aggregates carry a category breakdown, so they are stale the moment any
-    // label moves.
-    const rebuilt = [...groupByLocalDay(current)].map(([dateKey, dayEvents]) =>
-      aggregateDay(dateKey, dayEvents, gapMs),
-    );
-    await putDailyAggregates(rebuilt);
-  }
+  // The prior worker may have finished rewriting rows and stopped before saving
+  // their summaries. Rebuild on every migration attempt, including zero rewrites.
+  const rebuilt = [...groupByLocalDay(current)].map(([dateKey, dayEvents]) =>
+    aggregateDay(dateKey, dayEvents, gapMs),
+  );
+  await putDailyAggregates(rebuilt);
 
   return rewrites.length;
 }

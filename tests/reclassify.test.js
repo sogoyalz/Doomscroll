@@ -5,6 +5,7 @@ import {
   getAllReelEvents,
   getDailyAggregates,
   recordReelView,
+  putDailyAggregate,
 } from '../src/background/db.ts';
 import { reclassifyAll, reclassifyIfLexiconChanged } from '../src/background/reclassify.ts';
 import { classifyReel } from '../src/background/classify.ts';
@@ -129,11 +130,11 @@ describe('reclassifyIfLexiconChanged', () => {
     await recordReelView(makeEvent({ captionText: 'so much anxiety' }), null);
 
     expect(await reclassifyIfLexiconChanged()).toBe(1);
-    expect(store['doomscroll:lexiconVersion']).toBe(LEXICON_VERSION);
+    expect(store['doomscroll:lexiconVersionWithSummaries']).toBe(LEXICON_VERSION);
   });
 
   it('skips when the stored version already matches', async () => {
-    store['doomscroll:lexiconVersion'] = LEXICON_VERSION;
+    store['doomscroll:lexiconVersionWithSummaries'] = LEXICON_VERSION;
     await recordReelView(makeEvent({ captionText: 'so much anxiety' }), null);
 
     // Left unclassified precisely because the pass was skipped.
@@ -142,7 +143,7 @@ describe('reclassifyIfLexiconChanged', () => {
   });
 
   it('runs again once the version moves on', async () => {
-    store['doomscroll:lexiconVersion'] = LEXICON_VERSION - 1;
+    store['doomscroll:lexiconVersionWithSummaries'] = LEXICON_VERSION - 1;
     await recordReelView(makeEvent({ captionText: 'so much anxiety' }), null);
 
     expect(await reclassifyIfLexiconChanged()).toBe(1);
@@ -178,4 +179,15 @@ it('re-combines a saved model prediction with the current word lists without inf
   expect(stored.category).toBe('learning');
   // The model's own reading is kept for the review screen.
   expect(stored.classificationDetails).toEqual(details);
+});
+
+it('repairs stale summaries when the raw labels were already committed', async () => {
+  const event = makeEvent({ captionText: 'crying again tonight' });
+  await recordReelView(event, await classifyReel(event));
+  await putDailyAggregate({ date: '2026-08-07', totalReels: 1, categoryBreakdown: { neutral: 1 } });
+  store['doomscroll:lexiconVersion'] = LEXICON_VERSION;
+  expect(await reclassifyIfLexiconChanged()).toBe(0);
+  const [day] = await getDailyAggregates('2026-08-07', '2026-08-07');
+  expect(day.categoryBreakdown).toEqual({ sad: 1 });
+  expect(store['doomscroll:lexiconVersionWithSummaries']).toBe(LEXICON_VERSION);
 });
