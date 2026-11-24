@@ -3,6 +3,7 @@ import {
   hideOverlay,
   isOverlayShowing,
   showBreakReminder,
+  syncBreakReminder,
   showOverlay,
 } from '../src/content/overlay.ts';
 
@@ -341,4 +342,17 @@ describe('the prompt can be escaped with a keyboard', () => {
     expect(onKeep).toHaveBeenCalled();
     expect(onEnd).not.toHaveBeenCalled();
   });
+});
+
+it('closes only the break reminder on expiry or a remote end', () => {
+  const state = { interventionId: 'break', startedAt: 0, endsAt: 120000 };
+  const show = () => showBreakReminder({ state, now: 1, onKeep() {}, onEnd() {} });
+  show();
+  syncBreakReminder(state, 90000);
+  expect(shadow().textContent).toContain('1 minute left');
+  syncBreakReminder(state, 120000);
+  expect(isOverlayShowing()).toBe(false);
+  show();
+  syncBreakReminder(null, 2);
+  expect(isOverlayShowing()).toBe(false);
 });

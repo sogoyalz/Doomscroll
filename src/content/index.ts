@@ -19,7 +19,7 @@ import {
 } from './dom.js';
 import { createDwellTracker, type CompletedView } from './dwell-timer.js';
 import { confirmHudDelivery, mountHud, pushHudRow, unmountHud } from './hud.js';
-import { hideOverlay, isOverlayShowing, showBreakReminder, showOverlay } from './overlay.js';
+import { hideOverlay, isOverlayShowing, syncBreakReminder, showBreakReminder, showOverlay } from './overlay.js';
 import { goTo } from './navigate.js';
 import {
   BREAK_DESTINATION,
@@ -453,6 +453,7 @@ async function refreshBreak(): Promise<void> {
  * app — navigating back to /reels/ fires no load event.
  */
 function checkBreak(now: number): void {
+  syncBreakReminder(activeBreak, now);
   if (isOverlayShowing() || !isReelsSurface(location.pathname)) return;
   if (!shouldRemind(activeBreak, now) || !activeBreak) return;
 
@@ -510,6 +511,8 @@ function start(): void {
     if (changes[BREAK_KEY]) {
       const next = changes[BREAK_KEY].newValue;
       activeBreak = isBreakState(next) ? next : null;
+      syncBreakReminder(activeBreak, Date.now());
+      syncDwellClock();
     }
   });
 

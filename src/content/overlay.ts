@@ -38,6 +38,7 @@ interface OverlayOptions {
 
 let host: HTMLElement | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
+let breakDialog: { id: string; body: HTMLElement } | null = null;
 let keyHandler: ((event: KeyboardEvent) => void) | null = null;
 
 /**
@@ -272,6 +273,7 @@ function finish(options: OverlayOptions, action: DismissAction): void {
 
 export function hideOverlay(): void {
   clearTimer();
+  breakDialog = null;
   releaseKeyboard();
   host?.remove();
   host = null;
@@ -317,12 +319,9 @@ export function showBreakReminder(options: {
   const heading = document.createElement('h2');
   heading.textContent = 'You asked for a break';
 
-  const minutes = Math.ceil(breakRemainingMs(options.state, options.now) / 60_000);
   const body = document.createElement('p');
-  body.textContent =
-    minutes > 0
-      ? `About ${minutes} minute${minutes === 1 ? '' : 's'} left of it.`
-      : 'It has just about run out.';
+  breakDialog = { id: options.state.interventionId, body };
+  updateBreakText(body, options.state, options.now);
 
   const actions = document.createElement('div');
   actions.className = 'actions';
@@ -361,4 +360,21 @@ export function showBreakReminder(options: {
   });
 
   keep.focus();
+}
+
+function updateBreakText(body: HTMLElement, state: BreakState, now: number): void {
+  const minutes = Math.ceil(breakRemainingMs(state, now) / 60_000);
+  const text = minutes > 0
+    ? `About ${minutes} minute${minutes === 1 ? '' : 's'} left of it.`
+    : 'It has just about run out.';
+  if (body.textContent !== text) body.textContent = text;
+}
+
+export function syncBreakReminder(state: BreakState | null, now: number): void {
+  if (!breakDialog) return;
+  if (!state || state.interventionId !== breakDialog.id || now >= state.endsAt) {
+    hideOverlay();
+    return;
+  }
+  updateBreakText(breakDialog.body, state, now);
 }
