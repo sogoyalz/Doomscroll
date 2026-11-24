@@ -593,3 +593,19 @@ it('saves reviews independently, preserves them on relabel, and deletes them wit
     ).ok,
   ).toBe(false);
 });
+
+it('stores an older first delivery without raising a desktop reminder', async () => {
+  await send({ type: 'UPDATE_SETTINGS', payload: { interventionEnabled: true } });
+  detect.runDetection.mockResolvedValueOnce({ detected: true, category: 'sad', streak: 8 });
+  const t = Date.now() - 120000;
+  const notify = vi.spyOn(chrome.notifications, 'create');
+  try {
+    await send({ type: 'REEL_VIEW_LOGGED', payload: payload({ startedAt: t - 5000, endedAt: t }) },
+      { id: 'test', url: 'https://www.instagram.com/reels/', tab: { id: 11 } });
+    expect(await getAllReelEvents()).toHaveLength(1);
+    expect(notify).not.toHaveBeenCalled();
+    expect(await db.getInterventionLog()).toHaveLength(0);
+  } finally {
+    notify.mockRestore();
+  }
+});

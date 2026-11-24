@@ -176,11 +176,11 @@ const handlers: HandlerMap = {
     // A recovery alarm can win the race with live delivery. A recent live
     // duplicate still gets a chance to interrupt; persisted cooldowns prevent
     // repeated prompts. Historical recovery never interrupts unrelated tabs.
-    const live =
+    const isFreshTabDelivery = () =>
       sender.tab?.id !== undefined &&
       sender.url?.startsWith('https://www.instagram.com/') === true &&
-      Date.now() - payload.endedAt < 60_000;
-    if (!inserted && !live) return { queued: true };
+      payload.endedAt <= Date.now() && Date.now() - payload.endedAt < 60_000;
+    if (!inserted && !isFreshTabDelivery()) return { queued: true };
 
     // Everything below is analysis of what was just written. It must not be
     // able to fail the write: the reel is recorded either way, and that is
@@ -194,11 +194,8 @@ const handlers: HandlerMap = {
 
       // Interrupting is a separate decision with its own thresholds and
       // cooldowns, and it no-ops unless the user has switched it on.
-      if (
-        sender.tab?.id !== undefined &&
-        sender.url?.startsWith('https://www.instagram.com/')
-      ) {
-        await maybeIntervene(detection, settings, payload.sessionId, sender.tab.id);
+      if (isFreshTabDelivery()) {
+        await maybeIntervene(detection, settings, payload.sessionId, sender.tab?.id);
       }
     } catch (err) {
       console.error('Doomscroll: detection failed for a recorded reel', err);

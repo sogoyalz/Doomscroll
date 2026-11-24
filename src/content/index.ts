@@ -527,7 +527,7 @@ function start(): void {
 
     // Nothing is shown over a paused tracker: the user has already said they
     // do not want this extension acting right now.
-    if (!observing || isOverlayShowing()) {
+    if (!observing || !isTrackingSurface(location.pathname) || document.hidden || isOverlayShowing()) {
       sendResponse({ ok: true, data: { shown: false } });
       return false;
     }

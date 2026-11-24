@@ -94,6 +94,7 @@ function send(
   },
 ) {
   if (type === 'REEL_VIEW_LOGGED' && sender.tab) {
+    vi.mocked(Date.now).mockReturnValue(Math.max(Date.now(), payload.endedAt));
     sender = { ...sender, url: 'https://www.instagram.com/reels/synthetic/' };
   }
   return new Promise((resolve) => receive({ type, payload }, sender, resolve));
@@ -137,7 +138,7 @@ describe('real storage → classification → detection → intervention pipelin
     expect((await getSession('session-current')).reelCount).toBe(25);
     const decisions = await getInterventionLog();
     expect(decisions).toHaveLength(3);
-    expect(decisions.every((decision) => decision.deliveredAt === NOW)).toBe(true);
+    expect(decisions.every((decision) => decision.deliveredAt >= NOW)).toBe(true);
   });
 
   it('counts a long streak even with unreadable reels between classified reels', async () => {
