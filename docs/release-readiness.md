@@ -1,4 +1,4 @@
-# Release readiness: 1.1.0 candidate
+# Release readiness: 1.1.1 candidate
 
 This is a release candidate. Automated checks validate controlled inputs and
 packaged browser behavior. They cannot certify the current live Instagram DOM,

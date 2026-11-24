@@ -9,7 +9,7 @@ time. No account credentials or viewing exports should be sent to the developer.
 1. Obtain the reviewed release ZIP and its SHA-256 from the project owner.
    Verify the checksum, extract the archive, and load the extracted folder
    using Chrome's **Load unpacked** control. Keep only one Doomscroll copy enabled.
-2. Confirm version 1.1.0. Tracking is initially enabled; interruptions are off.
+2. Confirm version 1.1.1. Tracking is initially enabled; interruptions are off.
    Open Settings and read the privacy policy. Pause tracking if you do not want
    the extension to observe your feed. History remains on your computer.
 3. Enable the diagnostic panel only during a capture check. Its rows contain

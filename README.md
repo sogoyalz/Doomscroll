@@ -20,7 +20,7 @@ Publishing to the Chrome Web Store follows [docs/store-listing.md](docs/store-li
 Copy that listing as written. Do not add claims the privacy policy does not
 already make.
 
-**Version 1.1.0 · Manifest V3 · Chrome 116+ · All rights reserved**
+**Version 1.1.1 · Manifest V3 · Chrome 116+ · All rights reserved**
 
 > **Release candidate:** automated tests cover the application and packaged
 > extension. Live Instagram acceptance testing is only partially complete, and
@@ -326,7 +326,7 @@ dependencies; use `npx playwright install --with-deps chromium`.
 | `npm run lint`           | Check source with ESLint                                               |
 | `npm test`               | Run unit and integration tests and print V8 coverage                   |
 | `npm run test:browser`   | Test the existing release ZIP in Chromium; run `npm run package` first |
-| `npm run package`        | Build and create `doomscroll-1.1.0.zip` with a SHA-256 sidecar         |
+| `npm run package`        | Build and create `doomscroll-1.1.1.zip` with a SHA-256 sidecar         |
 | `npm run package:verify` | Build independently twice and check that archive bytes match           |
 | `npm run security:check` | Scan committed Git history for secrets and private-data files          |
 | `npm audit`              | Check dependency advisories                                            |

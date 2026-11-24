@@ -73,7 +73,7 @@ are rejected.
 
 ## What to do when you submit
 
-1. Build the upload with `npm run package`. Upload `doomscroll-1.1.0.zip` only.
+1. Build the upload with `npm run package`. Upload `doomscroll-1.1.1.zip` only.
    Do not upload the repository folder or `dist/` by hand.
 2. Paste the single purpose, the permission justifications, and the listing
    copy from this file.
@@ -121,9 +121,9 @@ still has open live and beta gates. Do not describe those as passed in the
 store form.
 
 - [x] Privacy policy text is in `PRIVACY.md`, including the limited-use statement the form asks you to certify.
-- [x] Version `1.1.0` matches in `manifest.json` and `package.json`.
+- [x] Version `1.1.1` matches in `manifest.json` and `package.json`.
 - [x] `npm run package` checks that the zip's permissions match the source, that source code does not send network requests (bundled model/runtime files are read locally), and that Direct and Accounts stay excluded.
-- [ ] You upload `doomscroll-1.1.0.zip` and pay or confirm the developer registration in your own Google account.
+- [ ] You upload `doomscroll-1.1.1.zip` and pay or confirm the developer registration in your own Google account.
 - [ ] You host the current `PRIVACY.md` at the privacy policy URL before submitting.
 
 Review usually takes a few days. A reviewer who asks about Instagram access
