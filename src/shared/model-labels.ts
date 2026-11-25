@@ -1,4 +1,4 @@
-import { cleanCaption } from './caption.js';
+import { captionSignals } from './caption.js';
 import type { ClassifierInput } from './classifier.js';
 import type { ClassificationResult } from './types.js';
 
@@ -32,12 +32,9 @@ export const TONE_LABELS: Record<string, string> = {
 
 export function modelText(input: ClassifierInput): string {
   // Never infer the subject from background music. Limit inference work per reel.
-  return [
-    cleanCaption(input.captionText) ?? '',
-    ...input.hashtags.map((tag) => tag.replace(/_/g, ' ')),
-  ]
+  const { captionText, hashtags } = captionSignals(input.captionText, input.hashtags);
+  return [captionText ?? '', ...hashtags.map((tag) => tag.replace(/_/g, ' '))]
     .join(' ')
-    .replace(/https?:\/\/\S+|@[\w.]+/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 600);

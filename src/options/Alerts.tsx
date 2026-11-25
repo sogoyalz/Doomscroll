@@ -60,9 +60,7 @@ export function Alerts({
           <h2>Reels aren&rsquo;t being saved</h2>
           <p>
             A write to the local database failed at {formatTimestamp(writeFailure.at)}. The
-            usual causes are a full disk or site data blocked for this Chrome profile. Watching
-            carries on and saving resumes by itself once writes succeed again, but reels watched
-            in the meantime are lost, and every number on this page is stale until then.
+            usual causes are a full disk or site data blocked for this Chrome profile. Some views may be awaiting recovery. Totals can lag while saving retries.
           </p>
           <p className="fine">{writeFailure.message}</p>
         </div>

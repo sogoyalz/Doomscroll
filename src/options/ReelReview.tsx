@@ -6,14 +6,18 @@ import type { ReelEvent } from '@shared/types.js';
 
 export function ReelReview({ reel }: { reel: ReelEvent }) {
   const predicted = reel.classificationDetails ?? classifyDimensions(reel);
-  const [topic, setTopic] = useState(reel.review?.topic ?? '');
-  const [tone, setTone] = useState(reel.review?.tone ?? '');
+  const [topic, setTopic] = useState(reel.review?.topic ?? (reel.review?.topicAbstention === 'other' ? '__other' : ''));
+  const [tone, setTone] = useState(reel.review?.tone ?? (reel.review?.toneAbstention === 'other' ? '__other' : ''));
   const [status, setStatus] = useState(reel.review ? 'Saved review' : '');
   const [busy, setBusy] = useState(false);
   async function save() {
     setBusy(true);
     try {
-      await send('REVIEW_REEL', { id: reel.id, topic: topic || null, tone: tone || null });
+      await send('REVIEW_REEL', { id: reel.id,
+        topic: topic === '__other' ? null : topic || null, tone: tone === '__other' ? null : tone || null,
+        topicAbstention: topic === '__other' ? 'other' : 'unsure',
+        toneAbstention: tone === '__other' ? 'other' : 'unsure',
+      });
       setStatus('Saved review');
     } catch {
       setStatus('Could not save. Please try again.');
@@ -46,11 +50,11 @@ export function ReelReview({ reel }: { reel: ReelEvent }) {
           ? '(model unavailable; rules fallback)'
           : ''}
       </p>
-      <p>
+      {status === 'Saved review' && <p>
         Suggested topic: <strong>{predicted.topic ?? 'Uncertain'}</strong> · Suggested tone:{' '}
         <strong>{predicted.tone ?? 'Uncertain'}</strong>
-      </p>
-      <p>Review after watching. Choose “Other / unsure” if these labels do not fit.</p>
+      </p>}
+      <p>Review after watching. Choose “Other” when the label you need is missing.</p>
       <label>
         Correct topic{' '}
         <select
@@ -61,7 +65,8 @@ export function ReelReview({ reel }: { reel: ReelEvent }) {
             setStatus('Unsaved');
           }}
         >
-          <option value="">Other / unsure</option>
+          <option value="">Unsure</option>
+          <option value="__other">Other</option>
           {TOPIC_CATEGORIES.map((c) => (
             <option key={c}>{c}</option>
           ))}
@@ -77,7 +82,8 @@ export function ReelReview({ reel }: { reel: ReelEvent }) {
             setStatus('Unsaved');
           }}
         >
-          <option value="">No clear tone / unsure</option>
+          <option value="">Unsure</option>
+          <option value="__other">Other</option>
           {CHARGED_CATEGORIES.map((c) => (
             <option key={c}>{c}</option>
           ))}

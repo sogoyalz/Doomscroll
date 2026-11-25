@@ -24,7 +24,7 @@ const DB_NAME = 'doomscroll';
 // reads as "not captured" and is normalised to null on the way out. v4 adds
 // interventionLog. v5 indexes events by session and start time for bounded
 // detection windows and full-session streaks.
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 /** How long raw per-reel history is kept. Daily aggregates outlive it. */
 export const RETENTION_DAYS = 90;
@@ -37,6 +37,7 @@ export interface DoomscrollDB extends DBSchema {
       'by-startedAt': number;
       'by-session': string;
       'by-session-time': [string, number];
+      'by-capture-day': string;
     };
   };
   sessions: {
@@ -81,6 +82,7 @@ export function getDB(): Promise<IDBPDatabase<DoomscrollDB>> {
           events.createIndex('by-session', 'sessionId');
         }
         const events = tx.objectStore('reelEvents');
+        if (!events.indexNames.contains('by-capture-day')) events.createIndex('by-capture-day', 'captureDays', { multiEntry: true });
         if (!events.indexNames.contains('by-session-time')) {
           events.createIndex('by-session-time', ['sessionId', 'startedAt']);
         }
@@ -173,6 +175,7 @@ export async function recordReelViewOnce(
 
   const reelEvent: ReelEvent = {
     ...event,
+    captureDays: event.calendar ? [...new Set([event.calendar.startDay, ...Object.keys(event.calendar.watchMsByDay)])] : undefined,
     review: undefined,
     classificationDetails: classification?.details,
     category: classification?.category ?? null,
@@ -315,6 +318,17 @@ export async function getSession(id: string): Promise<Session | undefined> {
   return db.get('sessions', id);
 }
 
+/** Resolve a delayed capture against durable sessions without rewinding the active watermark. */
+export async function sessionNear(start: number, end: number, gap: number): Promise<string | undefined> {
+  const db = await getDB();
+  const index = db.transaction('sessions').store.index('by-startedAt');
+  for (let cursor = await index.openCursor(IDBKeyRange.upperBound(end + gap), 'prev');
+       cursor; cursor = await cursor.continue()) {
+    if (cursor.value.endedAt >= start - gap) return cursor.value.id;
+  }
+  return undefined;
+}
+
 /** The most recent `limit` scrolling sessions, newest first. */
 export async function getRecentSessions(limit = 20): Promise<Session[]> {
   const db = await getDB();
@@ -451,7 +465,9 @@ export async function pruneOldData(now: number = Date.now()): Promise<number> {
     cursor;
     cursor = await cursor.continue()
   ) {
-    await cursor.delete();
+    if (!(await tx.objectStore('reelEvents').index('by-session').getKey(cursor.primaryKey))) {
+      await cursor.delete();
+    }
   }
 
   // The log outlives nothing: once the reels behind an entry are gone there is

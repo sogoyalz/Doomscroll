@@ -4,10 +4,10 @@ import { auditStorePermissions } from '../scripts/lib/store-permissions.mjs';
 const manifest = {
   permissions: ['storage', 'alarms', 'offscreen'],
   optional_permissions: ['notifications'],
-  host_permissions: ['https://*.instagram.com/*'],
+  host_permissions: ['https://www.instagram.com/*'],
   content_scripts: [
     {
-      matches: ['https://*.instagram.com/*'],
+      matches: ['https://www.instagram.com/*'],
     },
   ],
 };

@@ -18,7 +18,7 @@ const { classifyDimensions } = await loadClassifier();
 // Keep repeats of the same reel in one partition. Use latest reviewed view.
 const unique = new Map();
 for (const row of readRecords(file)
-  .filter((r) => r.reviewedAt)
+  .filter((r) => r.reviewedAt && r.reviewMethod === 'hidden-prediction')
   .sort((a, b) => a.reviewedAt.localeCompare(b.reviewedAt))) {
   unique.set(row.reelShortcode || rowKey(row), row);
 }

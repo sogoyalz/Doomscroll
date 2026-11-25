@@ -16,7 +16,14 @@ export default defineConfig({
     // Preloading exists to hide network latency. Extension pages load from
     // local disk, so it buys nothing here and costs a duplicate request.
     modulePreload: false,
-    rollupOptions: { input: { model: 'src/model/index.html' } },
+    rollupOptions: {
+      input: { model: 'src/model/index.html' },
+      output: {
+        assetFileNames: (asset) => asset.names.includes('ort-wasm-simd-threaded.asyncify.wasm')
+          ? 'runtime/ort-wasm-simd-threaded.asyncify.wasm'
+          : 'assets/[name]-[hash][extname]',
+      },
+    },
   },
   resolve: {
     alias: {

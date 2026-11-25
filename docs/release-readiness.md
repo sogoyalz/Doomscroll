@@ -1,8 +1,26 @@
-# Release readiness: 1.1.1 candidate
+# Release readiness: 1.1.2 candidate
 
 This is a release candidate. Automated checks validate controlled inputs and
 packaged browser behavior. They cannot certify the current live Instagram DOM,
 classifier quality across people and languages, or behavior change.
+
+## November 24 repair and package recheck
+
+The local 1.1.2 candidate is 73,874,166 bytes. Two independent builds produced SHA-256 `3d67a53dbc75c194df3432def654b9e03f8d0c2c0d8464a28a47f3981c5c7417`. The ZIP passed an integrity check. This digest identifies a working-tree build based on `011a9f8`.
+
+| Check | Result |
+| --- | --- |
+| Static and unit checks | TypeScript and ESLint passed, including release scripts. All 903 tests passed across 40 suites. |
+| Packaged browser checks on macOS | All 20 tests passed on Chrome for Testing 116.0.5845.96 and all 20 passed on Chromium 156.0.8078.4. Both ran the bundled model offline. |
+| Timer on an unseeded budget | Current Chromium displayed the in-page reminder after a real minute of focused viewing and accepted a five-minute snooze. |
+| Privacy and durability | Regression tests paused or deleted history with classification outstanding, rejected old diagnostics, retried a failed timer write, and preserved aggregate work after a partial failure. |
+| Capture and review | Tests cover a hidden tab closing without resuming, capture-day minutes across midnight, migration of prior history, blind first-pass labels and CSV export through Settings. |
+| Archive and dependency checks | One packaged WASM binary, canonical Instagram host access, zero known vulnerabilities reported by npm audit, and passing Git history and working-tree sensitive-data checks. |
+| Fictional holdout | Rules classified 42 of 48 examples correctly. Rules plus model classified 46. Both classified one of two anxious examples correctly. |
+
+In a disposable profile with 45,000 synthetic views, 12 popup navigations with a warm worker took 54–296 ms to render the headline. Median was 108 ms. The Settings export completed in 1.11 seconds and produced 10,035,917 bytes. The measurements cover this machine and fixture. Low-end frame timing, peak memory and cold-worker percentiles remain open.
+
+**Public launch remains on hold.** The signed-in Instagram layout matrix, independent labels from multiple people, unwanted-prompt rates, native OS notification visibility and assistive-technology trials still require live acceptance. Keep the earlier review as the record of the defects before repair. Its ZIP digest belongs to the previous build.
 
 ## Automated release gates
 
@@ -10,7 +28,7 @@ Run `npm ci` with Node 22.12+ (or Node 24+) and then `npm run verify`.
 Install the test browser first with `npx playwright install chromium`.
 
 - Strict TypeScript, lint, unit and integration tests.
-- Actual IndexedDB migration from schema 4 to schema 5.
+- Actual IndexedDB migration from schema 4 to schema 6.
 - A 20-reel streak reaches the delayed intervention with the default 15-reel
   dominance window. Unreadable reels do not truncate the counted streak.
 - Detection windows and streaks do not cross session boundaries.

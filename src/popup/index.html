@@ -22,13 +22,10 @@
           color: #333;
         "
       >
-        <strong style="display: block; margin-bottom: 6px">Wrong folder loaded</strong>
-        This is the build's source file, not the built extension. In
-        <code>chrome://extensions</code>, remove Doomscroll and Load unpacked again, selecting
-        the <strong>dist</strong> folder inside the project — not the project folder itself.
-        <div style="margin-top: 8px; color: #777">
-          Run <code>npm run build</code> first if <code>dist</code> does not exist.
-        </div>
+        <strong style="display: block; margin-bottom: 6px">Doomscroll could not open</strong>
+        Reload Doomscroll in <code>chrome://extensions</code> and reopen the popup.
+        If you installed a development build, check that you selected the built dist folder.
+        <div>Removing the extension deletes its local history.</div>
       </div>
     </div>
     <script type="module" src="./main.tsx"></script>

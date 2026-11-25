@@ -72,6 +72,14 @@ function inspect(directory, prefix = '') {
   }
 }
 inspect(dist);
+const wasmHashes = new Set();
+for (const directory of ['assets', 'runtime']) {
+  for (const file of readdirSync(join(dist, directory)).filter(name => name.endsWith('.wasm'))) {
+    const hash = createHash('sha256').update(readFileSync(join(dist, directory, file))).digest('hex');
+    if (wasmHashes.has(hash)) problems.push(`duplicate WASM runtime: ${file}`);
+    wasmHashes.add(hash);
+  }
+}
 // Refuse a missing or tampered model even when packaging an existing dist.
 const modelAssets = JSON.parse(readFileSync(join(root, 'scripts/model-assets.json'), 'utf8'));
 for (const [file, expected] of Object.entries(modelAssets.files)) {
@@ -174,6 +182,7 @@ try {
   rmSync(staging, { recursive: true, force: true });
 }
 
+if (lstatSync(zipPath).size > 75 * 1024 * 1024) fail('Archive exceeds the 75 MiB release budget');
 console.log(`\n  ✓ ${zipName}`);
 const checksum = createHash('sha256').update(readFileSync(zipPath)).digest('hex');
 writeFileSync(zipPath + '.sha256', `${checksum}  ${zipName}\n`);

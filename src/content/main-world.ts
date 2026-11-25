@@ -126,7 +126,7 @@ export function tagContainers(): void {
   // beyond this check, no attribute writes. The switch says the extension
   // stops watching the page, and this is the half of it that used to carry on
   // regardless because the MAIN world cannot reach chrome.storage to know.
-  if (trackingPaused() || !document.querySelector(VIDEO_PLAYER_SELECTOR)) return;
+  if (document.hidden || trackingPaused()) return;
 
   const containers = findReelContainers();
   let resolved = 0;
@@ -176,7 +176,7 @@ let retagScheduled = false;
  * meaningfully change. The isolated-world script already batches this way.
  */
 function scheduleRetag(): void {
-  if (retagScheduled) return;
+  if (retagScheduled || document.hidden) return;
   retagScheduled = true;
   requestAnimationFrame(() => {
     retagScheduled = false;

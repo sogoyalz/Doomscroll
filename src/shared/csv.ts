@@ -62,6 +62,9 @@ const REEL_EVENT_HEADER = [
   'classificationEngine',
   'classificationStatus',
   'reviewEngine',
+  'reviewMethod',
+  'topicAbstention',
+  'toneAbstention',
 ];
 
 /**
@@ -72,7 +75,11 @@ const REEL_EVENT_HEADER = [
  * form if anyone needs it.
  */
 export function reelEventsToCSV(events: ReelEvent[]): string {
-  const rows = events.map((e) => [
+  return [REEL_EVENT_HEADER.join(','), ...events.map(reelEventRow)].join('\n');
+}
+
+export function reelEventRow(e: ReelEvent): string {
+  return [
     e.id,
     e.reelShortcode,
     e.sessionId,
@@ -99,8 +106,10 @@ export function reelEventsToCSV(events: ReelEvent[]): string {
     e.classificationDetails?.engine ?? 'local-rules',
     e.classificationDetails?.status ?? '',
     e.review?.engine ?? '',
-  ]);
-  return toCSV(REEL_EVENT_HEADER, rows);
+    e.review?.method ?? '',
+    e.review?.topicAbstention ?? '',
+    e.review?.toneAbstention ?? '',
+  ].map(escapeCSV).join(',');
 }
 
 const DETECTION_LOG_HEADER = [

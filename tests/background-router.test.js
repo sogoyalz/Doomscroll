@@ -51,7 +51,7 @@ globalThis.chrome = {
         Object.assign(store, entries);
       },
       async remove(key) {
-        delete store[key];
+        for (const name of [key].flat()) delete store[name];
       },
     },
     onChanged: { addListener() {} },
@@ -566,6 +566,9 @@ describe('delivery and sender regressions', () => {
     await Promise.all([send(sample(true), sender), send(sample(false), sender)]);
     expect(store['doomscroll:extractionHealth'].samples).toBe(2);
     expect(store['doomscroll:extractionHealth'].missingAuthor).toBe(1);
+    await send({ type: 'CLEAR_DATA', payload: {} });
+    await send(sample(true), sender);
+    expect(store['doomscroll:extractionHealth']).toBeUndefined();
   });
 });
 
@@ -607,5 +610,26 @@ it('stores an older first delivery without raising a desktop reminder', async ()
     expect(await db.getInterventionLog()).toHaveLength(0);
   } finally {
     notify.mockRestore();
+  }
+});
+
+it.each(['pause', 'delete'])('honors %s while classification is still running', async action => {
+  let release;
+  const delayed = new Promise(resolve => { release = resolve; });
+  const classify = await import('../src/background/classify.ts');
+  const spy = vi.spyOn(classify, 'classifyReel').mockReturnValueOnce(delayed);
+  try {
+    const capture = send({ type: 'REEL_VIEW_LOGGED', payload: payload() });
+    await vi.waitFor(() => expect(spy).toHaveBeenCalled());
+    const control = action === 'pause'
+      ? { type: 'UPDATE_SETTINGS', payload: { trackingEnabled: false } }
+      : { type: 'CLEAR_DATA', payload: {} };
+    expect((await send(control)).ok).toBe(true);
+    release(null);
+    expect((await capture).data.queued).toBe(false);
+    expect(await db.getAllReelEvents()).toHaveLength(0);
+  } finally {
+    release(null);
+    spy.mockRestore();
   }
 });

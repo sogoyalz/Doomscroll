@@ -1,3 +1,4 @@
+import { DISCOVERY_TAGS } from './caption.js';
 // Lexicon tuning report.
 //
 // When most of a feed classifies as neutral there are two explanations that
@@ -111,12 +112,6 @@ const STOPWORDS = new Set([
   'dm',
   'post',
   'page',
-  'viral',
-  'trending',
-  'explore',
-  'fyp',
-  'foryou',
-  'foryoupage',
   'instagram',
   'insta',
   'ig',
@@ -124,24 +119,7 @@ const STOPWORDS = new Set([
   'subscribe',
   'watch',
   'full',
-  // Discovery-tag spam seen dominating a real feed's neutral misses. These
-  // carry no content signal — a reel tagged only with these is genuinely
-  // neutral, so they should not clutter the "what's missing" report.
-  'explorepage',
-  'exploremore',
-  'reelsinstagram',
-  'reelsindia',
-  'reelindia',
-  'instagood',
-  'trendingreels',
-  'reelitfeelit',
-  'reelkarofeelkaro',
-  'viralreels',
-  'reelsviral',
-  'trend',
-  'fypage',
-  'fypp',
-  'foryoupageofficiall',
+  ...DISCOVERY_TAGS,
 ]);
 
 const MIN_TERM_LENGTH = 3;

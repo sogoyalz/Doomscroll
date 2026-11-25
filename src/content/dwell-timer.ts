@@ -5,6 +5,9 @@
 // IntersectionObserver wiring lives in index.ts, which keeps the timing rules
 // unit-testable without stubbing browser observers.
 
+import { localDateKey, startOfLocalDayBefore } from '../shared/time.js';
+import type { CaptureCalendar } from '../shared/types.js';
+
 /** Below this, a reel was flicked past during momentum scroll, not shown. */
 export const MIN_DWELL_MS = 250;
 
@@ -27,6 +30,7 @@ export const MAX_DWELL_MS = 10 * 60 * 1000;
 export const MAX_HIDDEN_MS = 2 * 60 * 1000;
 
 export interface CompletedView<T> {
+  calendar: CaptureCalendar;
   target: T;
   startedAt: number;
   endedAt: number;
@@ -35,6 +39,7 @@ export interface CompletedView<T> {
 }
 
 interface ActiveView<T> {
+  calendar: CaptureCalendar;
   target: T;
   startedAt: number;
   /** Visible time banked before the current run. */
@@ -69,20 +74,35 @@ export function createDwellTracker<T>(
   let paused = false;
   let pausedAt: number | null = null;
 
+  function bank(view: ActiveView<T>, now: number): void {
+    if (view.runStartedAt === null) return;
+    let from = view.runStartedAt;
+    const until = Math.min(now, from + maxDwellMs - view.accumulatedMs);
+    while (from < until) {
+      const end = Math.min(until, startOfLocalDayBefore(from, -1));
+      const day = localDateKey(from);
+      const totals = view.calendar.watchMsByDay;
+      totals[day] = (totals[day] ?? 0) + end - from;
+      view.accumulatedMs += end - from;
+      from = end;
+    }
+    view.runStartedAt = null;
+  }
+
   function finalize(now: number): void {
     if (!active) return;
     const view = active;
     active = null;
 
-    const banked =
-      view.accumulatedMs + (view.runStartedAt === null ? 0 : now - view.runStartedAt);
-    const watchDurationMs = Math.min(Math.max(banked, 0), maxDwellMs);
+    bank(view, now);
+    const watchDurationMs = view.accumulatedMs;
     if (watchDurationMs < minDwellMs) return;
 
     onComplete({
+      calendar: view.calendar,
       target: view.target,
       startedAt: view.startedAt,
-      endedAt: now,
+      endedAt: pausedAt ?? now,
       watchDurationMs,
     });
   }
@@ -93,6 +113,7 @@ export function createDwellTracker<T>(
       finalize(now);
       if (target === null) return;
       active = {
+        calendar: { startDay: localDateKey(now), zone: Intl.DateTimeFormat().resolvedOptions().timeZone, watchMsByDay: {} },
         target,
         startedAt: now,
         accumulatedMs: 0,
@@ -106,8 +127,7 @@ export function createDwellTracker<T>(
       paused = true;
       pausedAt = now;
       if (active && active.runStartedAt !== null) {
-        active.accumulatedMs += now - active.runStartedAt;
-        active.runStartedAt = null;
+        bank(active, now);
       }
     },
 
@@ -126,7 +146,13 @@ export function createDwellTracker<T>(
       }
 
       pausedAt = null;
-      if (active && active.runStartedAt === null) active.runStartedAt = now;
+      if (active && active.runStartedAt === null) {
+        if (active.accumulatedMs === 0) {
+          active.startedAt = now;
+          active.calendar.startDay = localDateKey(now);
+        }
+        active.runStartedAt = now;
+      }
     },
 
     flush(now) {

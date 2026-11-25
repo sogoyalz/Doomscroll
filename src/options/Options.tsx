@@ -7,6 +7,8 @@
 // needs changing.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getDB } from '../background/db.js';
+import { reelEventRow, reelEventsToCSV } from '@shared/csv.js';
 import { send } from '@shared/client.js';
 import { showDesktopNotification, type NotificationResult } from '@shared/desktop-notification.js';
 import type { ExportKind } from '@shared/messages.js';
@@ -54,8 +56,26 @@ const notificationFeedback: Record<NotificationResult, string> = {
   failed: 'Chrome could not send the test notification. Check your notification settings and try again.',
 };
 
-function download(filename: string, contents: string): void {
-  const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv' }));
+async function reelExport(): Promise<Blob> {
+  const db = await getDB();
+  const tx = db.transaction('reelEvents');
+  const index = tx.store.index('by-startedAt');
+  const parts: BlobPart[] = [reelEventsToCSV([])];
+  let rows: string[] = [];
+  for (let cursor = await index.openCursor(); cursor; cursor = await cursor.continue()) {
+    rows.push(reelEventRow(cursor.value));
+    if (rows.length === 500) {
+      parts.push(new Blob(['\n', rows.join('\n')]));
+      rows = [];
+    }
+  }
+  await tx.done;
+  if (rows.length) parts.push(new Blob(['\n', rows.join('\n')]));
+  return new Blob(parts, { type: 'text/csv' });
+}
+
+function download(filename: string, contents: string | Blob): void {
+  const url = URL.createObjectURL(contents instanceof Blob ? contents : new Blob([contents], { type: 'text/csv' }));
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
@@ -121,6 +141,8 @@ export function Options() {
     // an empty state: the welcome below treats no log and no history as a
     // fresh install. Left uncounted, a user with months of history whose
     // queries happened to fail would be told they were new.
+    setTuning(null);
+    setAuthors(null);
     setPanelsFailed(0);
     const panel = <T,>(p: Promise<T>, apply: (value: T) => void) =>
       p.then(apply).catch((err: unknown) => {
@@ -133,9 +155,7 @@ export function Options() {
       panel(send('GET_DETECTION_LOG', { limit: LOG_LIMIT }), setLog),
       panel(readHealth(), setHealth),
       panel(readStorageFailure(), setWriteFailure),
-      panel(send('GET_TUNING_REPORT', { limit: 24 }), setTuning),
       panel(send('GET_INTERVENTION_LOG', { limit: LOG_LIMIT }), setInterventions),
-      panel(send('GET_AUTHOR_STATS', { limit: 10 }), setAuthors),
       panel(send('GET_STATS', { range: '30d' }), setDaily),
       panel(send('GET_SESSIONS', { limit: 15 }), setSessions),
     ]);
@@ -186,6 +206,10 @@ export function Options() {
     exportingRef.current = which;
     setExporting(which);
     try {
+      if (which === 'reels') {
+        download('doomscroll-reels.csv', await reelExport());
+        return;
+      }
       const { filename, csv } = await send('EXPORT_DATA', { which });
       download(filename, csv);
     } catch (err) {
@@ -565,6 +589,15 @@ export function Options() {
         </div>
       </section>
 
+      {(!tuning || !authors) && <button className="action" onClick={async () => {
+        try {
+          const [report, breakdown] = await Promise.all([
+            send('GET_TUNING_REPORT', { limit: 24 }), send('GET_AUTHOR_STATS', { limit: 10 }),
+          ]);
+          setTuning(report);
+          setAuthors(breakdown);
+        } catch (err) { setActionError(String(err)); }
+      }}>Load vocabulary and creator reports</button>}
       <TuningPanel tuning={tuning} />
 
       <DetectionLogPanel log={log} />

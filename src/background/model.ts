@@ -26,6 +26,11 @@ export async function classifyWithModel(
   if (!letters.length) return null;
   const latin = letters.filter((letter) => /\p{Script=Latin}/u.test(letter)).length;
   if (latin / letters.length < 0.7) throw new Error('Unsupported model language');
+  if (chrome.i18n?.detectLanguage) {
+    const language = await chrome.i18n.detectLanguage(text);
+    if (language.isReliable && language.languages[0]?.language !== 'en')
+      throw new Error('Unsupported model language');
+  }
   await ensureDocument();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

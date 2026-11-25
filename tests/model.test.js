@@ -135,3 +135,16 @@ describe('combining the word lists with the model', () => {
     expect(combineWithRules(rules('food'), null).category).toBe('food');
   });
 });
+
+it('passes the model content tags once and drops discovery tags and account mentions', () => {
+  expect(
+    modelText({
+      captionText: 'New term! @travel #SYLLABUS #explore',
+      hashtags: ['syllabus', 'fyp'],
+      audioName: null,
+    }),
+  ).toBe('New term! syllabus');
+  expect(modelText({ captionText: '#Trending #Explore', hashtags: [], audioName: null })).toBe(
+    '',
+  );
+});

@@ -1,6 +1,6 @@
 {
   "name": "doomscroll",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
@@ -11,7 +11,7 @@
     "package:verify": "node scripts/verify-package.mjs",
     "test": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext .ts,.tsx,.js,.cjs",
+    "lint": "eslint . --ext .ts,.tsx,.js,.cjs,.mjs",
     "format": "prettier --write .",
     "test:browser": "playwright test",
     "security:check": "node scripts/check-sensitive.mjs HEAD",

@@ -28,7 +28,7 @@ import { CHARGED_CATEGORIES, TOPIC_CATEGORIES, type Category } from './taxonomy.
  * applies to hashtags, so terms that previously scored nothing when written
  * with a '#' are readable in history too.
  */
-export const LEXICON_VERSION = 10;
+export const LEXICON_VERSION = 12;
 
 export type ClassifiableCategory = Exclude<Category, 'neutral'>;
 
@@ -502,7 +502,6 @@ const TOPICS: Record<(typeof TOPIC_CATEGORIES)[number], CategoryLexicon> = {
       'comedyreels',
       'relatable',
       'funnyvideos',
-      'trending',
     ],
     emoji: ['😂', '🤣', '😹', '🤡'],
   },
@@ -813,10 +812,19 @@ const TOPICS: Record<(typeof TOPIC_CATEGORIES)[number], CategoryLexicon> = {
       'manali',
       'flight',
       'roadtrip',
-      'explore',
       'passport',
     ],
-    phrases: ['travel diaries', 'places to visit', 'hidden gem', 'road trip'],
+    phrases: [
+      'travel diaries',
+      'places to visit',
+      'hidden gem',
+      'road trip',
+      'back in my home country',
+      'back in the motherland',
+      'back to my home country',
+      'flying home',
+      'flew home',
+    ],
     hashtags: [
       'travel',
       'wanderlust',
@@ -827,7 +835,6 @@ const TOPICS: Record<(typeof TOPIC_CATEGORIES)[number], CategoryLexicon> = {
       'trekking',
       'travelgram',
       'roadtrip',
-      'explore',
     ],
     emoji: ['✈️', '🏔️', '🏖️', '🗺️', '🎒', '🏕️'],
   },
@@ -977,6 +984,7 @@ const TOPICS: Record<(typeof TOPIC_CATEGORIES)[number], CategoryLexicon> = {
       'theaters',
       'superhero',
       'screenplay',
+      'deadpool',
       'showrunner',
     ],
     phrases: [
@@ -1069,6 +1077,11 @@ const TOPICS: Record<(typeof TOPIC_CATEGORIES)[number], CategoryLexicon> = {
       'study',
       'studying',
       'lecture',
+      'syllabus',
+      'curriculum',
+      'semester',
+      'academia',
+      'phd',
       'scholarship',
       'visa',
       'tutorial',

@@ -50,7 +50,7 @@ export async function reclassifyAll(
               details,
             })
           : null;
-      if (!combined || combined.category === event.category) {
+      if (!combined || (combined.category === event.category && combined.confidence === event.categoryConfidence && JSON.stringify(combined.subtags) === JSON.stringify(event.subtags))) {
         current.push(event);
         continue;
       }
@@ -69,7 +69,8 @@ export async function reclassifyAll(
     const category = classification?.category ?? null;
     if (
       category === event.category &&
-      (classification?.confidence ?? null) === event.categoryConfidence
+      (classification?.confidence ?? null) === event.categoryConfidence &&
+      JSON.stringify(classification?.subtags ?? []) === JSON.stringify(event.subtags)
     ) {
       current.push(event);
       continue;

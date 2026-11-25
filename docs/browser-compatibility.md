@@ -14,3 +14,5 @@ The prior Chrome 111 declaration understated the notification API requirement.
 Automated integration tests exercise the packaged ZIP on the Chromium build
 installed by the locked Playwright version on macOS and Linux. API availability
 review does not substitute for runtime testing on every browser version.
+
+On November 24, 2026, all 20 packaged tests passed on macOS arm64 with Chrome for Testing 116.0.5845.96 and Chromium 156.0.8078.4. Set `DOOMSCROLL_CHROME_PATH` to a Chrome for Testing executable to repeat the minimum-version run. [Package recheck](release-readiness.md#november-24-repair-and-package-recheck)

@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { currentSessionId } from '../src/background/session.ts';
 import { DEFAULT_SETTINGS } from '../src/shared/defaults.ts';
@@ -28,6 +29,12 @@ beforeEach(() => {
 });
 
 describe('currentSessionId', () => {
+  it('keeps an hour-old capture out of the current session without rewinding it', async () => {
+    const id = await currentSessionId(4_000_000);
+    expect(await currentSessionId(400_000)).not.toBe(id);
+    expect(await currentSessionId(4_001_000)).toBe(id);
+  });
+
   it('assigns concurrent tabs the same session', async () => {
     const ids = await Promise.all(Array.from({ length: 8 }, () => currentSessionId(1000)));
     expect(new Set(ids).size).toBe(1);

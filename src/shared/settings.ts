@@ -25,11 +25,17 @@ export const SETTINGS_KEY = 'doomscroll:settings';
  * than as undefined.
  */
 export async function getSettings(): Promise<UserSettings> {
-  let stored: unknown;
   try {
-    ({ [SETTINGS_KEY]: stored } = await chrome.storage.local.get(SETTINGS_KEY));
+    return await readSettings();
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, trackingEnabled: false };
+  }
+}
+
+export async function readSettings(): Promise<UserSettings> {
+  const { [SETTINGS_KEY]: stored } = await chrome.storage.local.get(SETTINGS_KEY);
+  if (stored !== undefined && (!stored || typeof stored !== 'object' || Array.isArray(stored))) {
+    throw new Error('Saved settings are unreadable');
   }
   return mergeSettings(DEFAULT_SETTINGS, stored);
 }
@@ -38,7 +44,7 @@ const serializeUpdate = createSerialQueue();
 
 export function updateSettings(patch: Partial<UserSettings>): Promise<UserSettings> {
   return serializeUpdate(async () => {
-    const next = mergeSettings(await getSettings(), patch);
+    const next = mergeSettings(await readSettings(), patch);
     await chrome.storage.local.set({ [SETTINGS_KEY]: next });
     return next;
   });
@@ -127,7 +133,7 @@ function mergeSettings(base: UserSettings, patch: unknown): UserSettings {
 
   return {
     ...merged,
-    trackingEnabled: bool(merged.trackingEnabled, DEFAULT_SETTINGS.trackingEnabled),
+    trackingEnabled: bool(merged.trackingEnabled, false),
     interventionEnabled: bool(merged.interventionEnabled, DEFAULT_SETTINGS.interventionEnabled),
     timeReminderMinutes: Math.round(clamp(merged.timeReminderMinutes, { min: 0, max: 180 }, 0)),
     debugHud: bool(merged.debugHud, DEFAULT_SETTINGS.debugHud),

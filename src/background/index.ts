@@ -29,7 +29,6 @@ import {
 import {
   AGGREGATE_ALARM,
   backfillMissingAggregates,
-  clearDirtyDays,
   flushDirtyDays,
   markDayDirty,
   recomputeAllDays,
@@ -40,7 +39,7 @@ import { classifyReel } from './classify.js';
 import { runDetection } from './detect.js';
 import { beginBreak, endBreak, maybeIntervene, recordOutcome } from './intervene.js';
 import { reclassifyIfLexiconChanged } from './reclassify.js';
-import { getSettings, updateSettings } from '@shared/settings.js';
+import { getSettings, readSettings, updateSettings } from '@shared/settings.js';
 import { noteStorageFailure, noteStorageWorking } from '@shared/storage-health.js';
 import { recordExtraction } from '@shared/health.js';
 import { detectionLogToCSV, interventionLogToCSV, reelEventsToCSV } from '@shared/csv.js';
@@ -63,6 +62,8 @@ import { tickBudget, respondToTimer } from './time-reminder.js';
 import { TIME_REMINDER_KEY } from '@shared/time-reminder.js';
 
 const serializeHistory = createSerialQueue();
+const serializeCapture = createSerialQueue();
+const serializeTimer = createSerialQueue();
 
 const PRUNE_ALARM = 'doomscroll:prune';
 const PRUNE_PERIOD_MINUTES = 24 * 60;
@@ -85,13 +86,14 @@ type HandlerMap = {
   [M in ExtensionMessage as M['type']]?: (
     payload: M['payload'],
     sender: chrome.runtime.MessageSender,
+    receivedAt: number,
   ) => Promise<MessageResponses[M['type']]>;
 };
 
 const handlers: HandlerMap = {
-  async TIME_TICK({ start, end }, sender) {
+  async TIME_TICK({ start, end }, sender, receivedAt) {
     if (sender.tab?.id === undefined || !sender.url?.startsWith('https://www.instagram.com/')) return false;
-    await tickBudget(sender.tab.id, start, end);
+    await tickBudget(sender.tab.id, start, end, receivedAt);
     return true;
   },
   async TIME_RESPONSE({ id, action }) {
@@ -110,109 +112,86 @@ const handlers: HandlerMap = {
   },
   async REEL_VIEW_LOGGED(payload, sender) {
     if (!isNewReelEvent(payload)) throw new Error('Invalid reel event');
-    const settings = await getSettings();
-    const { [DISCARD_VIEWS_BEFORE_KEY]: discardedBefore } =
-      await chrome.storage.local.get(DISCARD_VIEWS_BEFORE_KEY);
-
-    // Enforce "paused = nothing recorded" here, not only in the content
-    // script. Pausing tears the observers down per tab via a storage change
-    // event, but an in-flight message, or a reel completing in a throttled
-    // background tab during that race window, would otherwise still be
-    // written. The write path is the one place the guarantee can be absolute.
-    if (
-      !settings.trackingEnabled ||
-      (typeof discardedBefore === 'number' && payload.startedAt < discardedBefore)
-    ) {
+    const settings = await readSettings();
+    const canSave = async () => {
+      const data = await chrome.storage.local.get(DISCARD_VIEWS_BEFORE_KEY);
+      const cutoff = data[DISCARD_VIEWS_BEFORE_KEY];
+      return cutoff === undefined || (typeof cutoff === 'number' && payload.startedAt > cutoff);
+    };
+    if (!settings.trackingEnabled || !(await canSave())) {
       await forgetPendingView(payload.id);
       return { queued: false };
     }
-
-    // Classify before committing the event. The local model is asynchronous;
-    // pending-view recovery preserves the input if this worker is stopped.
-    //
-    // A failure here is the one the user cannot otherwise see. Everything
-    // downstream is skipped, correctly — there is nothing to aggregate — but
-    // the popup would then read "Nothing tracked yet", which is what it also
-    // says when you simply have not scrolled. Recording the failure is what
-    // lets the dashboard tell those apart.
-    // Classified outside the guard below, so that only the write is attributed
-    // to storage. As an argument it sat inside it, and a classifier throwing
-    // on a malformed payload would have been reported to the user as "reels
-    // aren't being saved — usually a full disk", sending them to look at the
-    // one thing that was fine.
     const previous = await getReelEvent(payload.id);
-    if (previous) payload = previous;
-    else if (payload.sessionId === UNASSIGNED_SESSION_ID) {
-      payload = {
-        ...payload,
-        sessionId: await currentSessionId(
-          payload.endedAt,
-          settings.sessionGapThresholdMs,
-          payload.startedAt,
-        ),
-      };
-    }
-    const classification = previous
-      ? previous.category === null
-        ? null
-        : {
-            category: previous.category,
-            confidence: previous.categoryConfidence ?? 0,
-            subtags: previous.subtags,
-            details: previous.classificationDetails,
-          }
-      : await classifyReel(payload, settings.classificationMode);
+    const classification = previous ? null : await classifyReel(payload, settings.classificationMode);
 
-    let inserted: boolean;
-    try {
-      const stored = await recordReelViewOnce(payload, classification);
-      inserted = stored.inserted;
-    } catch (err) {
-      await noteStorageFailure(err);
-      throw err;
-    }
-    await noteStorageWorking();
-
-    // Bookkeeping immediately after the write, and BEFORE anything that reads
-    // the history back. These two are what get the day rolled up, and the
-    // rollups are what the detector's baseline is computed from — so a failure
-    // in detection that skipped them would starve the very thing that failed,
-    // silently and self-reinforcingly. The reel would sit in the store while
-    // its day never became an aggregate.
-    await markDayDirty(payload.startedAt);
-    await scheduleAggregateFlush();
-    await forgetPendingView(payload.id);
-    // A previous worker may have saved this view and stopped before marking
-    // its day dirty. Retry bookkeeping, while keeping analysis once per view.
-    // A recovery alarm can win the race with live delivery. A recent live
-    // duplicate still gets a chance to interrupt; persisted cooldowns prevent
-    // repeated prompts. Historical recovery never interrupts unrelated tabs.
-    const isFreshTabDelivery = () =>
-      sender.tab?.id !== undefined &&
-      sender.url?.startsWith('https://www.instagram.com/') === true &&
-      payload.endedAt <= Date.now() && Date.now() - payload.endedAt < 60_000;
-    if (!inserted && !isFreshTabDelivery()) return { queued: true };
-
-    // Everything below is analysis of what was just written. It must not be
-    // able to fail the write: the reel is recorded either way, and that is
-    // what this message promises. A thrown error here would otherwise be
-    // swallowed by the content script's catch and lose the view entirely.
-    try {
-      // Detection always runs and always logs, whether or not anything is
-      // allowed to act on it — that separation is what made the log-only
-      // period possible and is worth keeping.
-      const detection = await runDetection(payload.sessionId, settings, Date.now(), inserted);
-
-      // Interrupting is a separate decision with its own thresholds and
-      // cooldowns, and it no-ops unless the user has switched it on.
-      if (isFreshTabDelivery()) {
-        await maybeIntervene(detection, settings, payload.sessionId, sender.tab?.id);
+    // Pause and deletion can complete while inference is running. Check again
+    // under the writer lock before assigning a session or committing history.
+    return serializeHistory(async () => {
+      const settings = await readSettings();
+      if (!settings.trackingEnabled || !(await canSave())) {
+        await forgetPendingView(payload.id);
+        return { queued: false };
       }
-    } catch (err) {
-      console.error('Doomscroll: detection failed for a recorded reel', err);
-    }
+      if (previous) payload = previous;
+      else if (payload.sessionId === UNASSIGNED_SESSION_ID) {
+        payload = { ...payload, sessionId: await currentSessionId(
+          payload.endedAt, settings.sessionGapThresholdMs, payload.startedAt,
+        ) };
+      }
+      let inserted: boolean;
+      try {
+        const stored = await recordReelViewOnce(payload, classification);
+        inserted = stored.inserted;
+      } catch (err) {
+        await noteStorageFailure(err);
+        throw err;
+      }
+      await noteStorageWorking();
 
-    return { queued: true };
+      // Bookkeeping immediately after the write, and BEFORE anything that reads
+      // the history back. These two are what get the day rolled up, and the
+      // rollups are what the detector's baseline is computed from — so a failure
+      // in detection that skipped them would starve the very thing that failed,
+      // silently and self-reinforcingly. The reel would sit in the store while
+      // its day never became an aggregate.
+      for (const day of new Set([payload.calendar?.startDay, ...Object.keys(payload.calendar?.watchMsByDay ?? {})])) {
+        await markDayDirty(payload.startedAt, day);
+      }
+      await scheduleAggregateFlush();
+      await forgetPendingView(payload.id);
+      // A previous worker may have saved this view and stopped before marking
+      // its day dirty. Retry bookkeeping, while keeping analysis once per view.
+      // A recovery alarm can win the race with live delivery. A recent live
+      // duplicate still gets a chance to interrupt; persisted cooldowns prevent
+      // repeated prompts. Historical recovery never interrupts unrelated tabs.
+      const isFreshTabDelivery = () =>
+        sender.tab?.id !== undefined &&
+        sender.url?.startsWith('https://www.instagram.com/') === true &&
+        payload.endedAt <= Date.now() && Date.now() - payload.endedAt < 60_000;
+      if (!inserted && !isFreshTabDelivery()) return { queued: true };
+
+      // Everything below is analysis of what was just written. It must not be
+      // able to fail the write: the reel is recorded either way, and that is
+      // what this message promises. A thrown error here would otherwise be
+      // swallowed by the content script's catch and lose the view entirely.
+      try {
+        // Detection always runs and always logs, whether or not anything is
+        // allowed to act on it — that separation is what made the log-only
+        // period possible and is worth keeping.
+        const detection = await runDetection(payload.sessionId, settings, Date.now(), inserted);
+
+        // Interrupting is a separate decision with its own thresholds and
+        // cooldowns, and it no-ops unless the user has switched it on.
+        if (isFreshTabDelivery()) {
+          await maybeIntervene(detection, settings, payload.sessionId, sender.tab?.id, Date.now(), sender.documentId);
+        }
+      } catch (err) {
+        console.error('Doomscroll: detection failed for a recorded reel', err);
+      }
+
+      return { queued: true };
+    });
   },
 
   async EXTRACTION_OBSERVED(payload) {
@@ -228,11 +207,16 @@ const handlers: HandlerMap = {
         bridge !== 'no-code' &&
         bridge !== 'absent') ||
       typeof payload.now !== 'number' ||
-      !Number.isFinite(payload.now)
+      !Number.isFinite(payload.now) || (payload.startedAt !== undefined &&
+        (!Number.isFinite(payload.startedAt) || payload.startedAt > payload.now))
     ) {
       throw new Error('Invalid extraction sample');
     }
-    await recordExtraction(payload);
+    const data = await chrome.storage.local.get(DISCARD_VIEWS_BEFORE_KEY);
+    const cutoff = data[DISCARD_VIEWS_BEFORE_KEY];
+    if ((await getSettings()).trackingEnabled && (cutoff === undefined || (typeof cutoff === 'number' && payload.startedAt !== undefined && payload.startedAt > cutoff))) {
+      await recordExtraction(payload);
+    }
     return { ok: true as const };
   },
 
@@ -251,7 +235,7 @@ const handlers: HandlerMap = {
   },
 
   async GET_SETTINGS() {
-    return getSettings();
+    return readSettings();
   },
 
   // Replies with what was stored, not with an acknowledgement. Every numeric
@@ -262,7 +246,7 @@ const handlers: HandlerMap = {
     const before = await getSettings();
     const after = await updateSettings(payload);
     if (!after.trackingEnabled || after.timeReminderMinutes !== before.timeReminderMinutes) {
-      await chrome.storage.local.remove(TIME_REMINDER_KEY);
+      await serializeTimer(() => chrome.storage.local.remove(TIME_REMINDER_KEY));
     }
     if (!after.trackingEnabled) {
       await chrome.storage.local.set({ [DISCARD_VIEWS_BEFORE_KEY]: Date.now() });
@@ -369,27 +353,24 @@ const handlers: HandlerMap = {
   async CLEAR_DATA() {
     await chrome.storage.local.set({ [DISCARD_VIEWS_BEFORE_KEY]: Date.now() });
     await clearPendingViews();
+    await serializeTimer(() => chrome.storage.local.remove(TIME_REMINDER_KEY));
     await chrome.storage.local.remove([
       SESSION_KEY,
-      TIME_REMINDER_KEY,
+      'doomscroll:extractionHealth',
+      'doomscroll:storageFailure',
+      'doomscroll:break',
+      'doomscroll:dirtyDays',
       'doomscroll:interventionState',
       'doomscroll:interventionRetryAfter',
     ]);
     await clearAllData();
-    // Two pieces of transient state in chrome.storage that outlive the wipe
-    // and go on referring to history that is gone. A break would keep
-    // interrupting someone who just asked for everything to be forgotten —
-    // ended without attribution, since the row it would be recorded against no
-    // longer exists. And the dirty-day queue would roll the deleted days up as
-    // empty aggregates on the next alarm, putting them back on the charts.
-    await Promise.all([endBreak(false), clearDirtyDays()]);
     return { ok: true };
   },
 };
 
 chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendResponse) => {
   const handler = handlers[message?.type as keyof HandlerMap] as
-    | ((payload: unknown, sender: chrome.runtime.MessageSender) => Promise<unknown>)
+    | ((payload: unknown, sender: chrome.runtime.MessageSender, receivedAt: number) => Promise<unknown>)
     | undefined;
 
   // Returning false releases the channel, so unknown senders get a prompt
@@ -433,10 +414,15 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
 
   // Settings reads cannot mutate history and should remain responsive during
   // exports/rebuilds. GET_STATS does write aggregates, so stays serialized.
-  const request =
-    message.type === 'GET_SETTINGS'
-      ? Promise.resolve().then(() => handler(message.payload, sender))
-      : serializeHistory(() => handler(message.payload, sender));
+  const receivedAt = Date.now();
+  const run = () => handler(message.payload, sender, receivedAt);
+  let request;
+  if (message.type === 'REEL_VIEW_LOGGED') request = serializeCapture(run);
+  else if (message.type === 'TIME_TICK') request = serializeTimer(run);
+  else if (message.type === 'TIME_RESPONSE') request = serializeHistory(() => serializeTimer(run));
+  else if (['GET_SETTINGS', 'GET_AUTHOR_STATS', 'GET_TUNING_REPORT', 'EXPORT_DATA'].includes(message.type))
+    request = Promise.resolve().then(run);
+  else request = serializeHistory(run);
   request
     .then((result) => sendResponse({ ok: true, data: result }))
     .catch((err: unknown) => {
@@ -457,7 +443,7 @@ async function retryPendingViews(): Promise<void> {
     // Recovered views update history and detection, but never interrupt a tab
     // that may now be showing unrelated content.
     try {
-      await handlers.REEL_VIEW_LOGGED!(event, {});
+      await serializeCapture(() => handlers.REEL_VIEW_LOGGED!(event, {}, Date.now()));
     } catch {
       // Retain this durable copy for the next attempt, but do not let a
       // single failing record starve every later view. Never log its payload.
@@ -481,7 +467,11 @@ async function ensureMaintenanceAlarms(): Promise<void> {
 // transactional event IDs make overlapping startup/alarm retries safe.
 void (async () => {
   await ensureMaintenanceAlarms();
-  await serializeHistory(retryPendingViews);
+  await retryPendingViews();
+  await serializeHistory(async () => {
+    const settings = await getSettings();
+    await reclassifyIfLexiconChanged(settings.classificationMode, settings.sessionGapThresholdMs);
+  });
 })().catch((err: unknown) => {
   console.error('Doomscroll: worker recovery failed', err);
 });
@@ -520,17 +510,14 @@ chrome.runtime.onInstalled.addListener((details) => {
 // The browser may have closed before a debounced flush fired, leaving days
 // marked dirty across restarts.
 chrome.runtime.onStartup.addListener(() => {
-  void serializeHistory(async () => {
-    await retryPendingViews();
-    await flushPending();
-  }).catch((err: unknown) => {
+  void retryPendingViews().then(() => serializeHistory(flushPending)).catch((err: unknown) => {
     console.error('Doomscroll: startup flush failed', err);
   });
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === DELIVERY_ALARM) {
-    void serializeHistory(retryPendingViews).catch((err: unknown) => {
+    void retryPendingViews().catch((err: unknown) => {
       console.error('Doomscroll: pending views could not be saved', err);
     });
     return;

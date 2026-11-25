@@ -11,8 +11,7 @@ import { DISCARD_VIEWS_BEFORE_KEY } from '@shared/pending-views.js';
 import { getSettings } from '@shared/settings.js';
 import { beginBreak, readBreak } from './intervene.js';
 
-export async function tickBudget(tabId: number, start: number, end: number): Promise<void> {
-  const now = Date.now();
+export async function tickBudget(tabId: number, start: number, end: number, now = Date.now()): Promise<void> {
   if (
     !Number.isFinite(start) ||
     !Number.isFinite(end) ||
@@ -27,7 +26,7 @@ export async function tickBudget(tabId: number, start: number, end: number): Pro
   if (isBreakActive(await readBreak(), now)) return;
   const data = await chrome.storage.local.get([TIME_REMINDER_KEY, DISCARD_VIEWS_BEFORE_KEY]);
   const cutoff = data[DISCARD_VIEWS_BEFORE_KEY];
-  if (typeof cutoff === 'number' && start < cutoff) return;
+  if (cutoff !== undefined && (typeof cutoff !== 'number' || !Number.isFinite(cutoff) || start <= cutoff)) return;
   const state = addActiveTime(
     readTimeBudget(data[TIME_REMINDER_KEY]),
     settings.timeReminderMinutes,
@@ -38,8 +37,8 @@ export async function tickBudget(tabId: number, start: number, end: number): Pro
   const due = state.spentMs >= state.targetMs && !state.delivered;
   if (due) state.reminderId ??= crypto.randomUUID();
   await chrome.storage.local.set({ [TIME_REMINDER_KEY]: state });
-  if (!due || !state.reminderId) return;
-  // Recheck the originating document after waiting in the history queue.
+  if (!due || !state.reminderId || Date.now() - end > SAMPLE_MS * 2) return;
+  // Recheck the originating document before presenting a reminder.
   const ready = await chrome.tabs
     .sendMessage(tabId, { type: 'TIME_REMINDER_READY' })
     .catch(() => false);

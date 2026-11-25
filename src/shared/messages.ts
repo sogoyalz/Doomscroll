@@ -27,7 +27,7 @@ export type ExportKind = 'reels' | 'detection' | 'interventions';
 export type ExtensionMessage =
   | { type: 'TIME_TICK'; payload: { start: number; end: number } }
   | { type: 'TIME_RESPONSE'; payload: { id: string; action: 'snooze' | 'break' } }
-  | { type: 'REVIEW_REEL'; payload: { id: string; topic: string | null; tone: string | null } }
+  | { type: 'REVIEW_REEL'; payload: { id: string; topic: string | null; tone: string | null; topicAbstention?: string; toneAbstention?: string } }
   | { type: 'GET_SESSION_ID'; payload: { startedAt: number; endedAt: number } }
   | { type: 'REEL_VIEW_LOGGED'; payload: NewReelEvent }
   | {
@@ -39,6 +39,7 @@ export type ExtensionMessage =
         fromFiber: boolean;
         audioChannel: string | null;
         bridgeStatus: 'ok' | 'no-fiber' | 'no-code' | 'absent';
+        startedAt?: number;
         now: number;
       };
     }
@@ -76,7 +77,6 @@ export type ExtensionMessage =
   | { type: 'EXPORT_DATA'; payload: { which: ExportKind } }
   | { type: 'CLEAR_DATA'; payload: Record<string, never> };
 
-export type MessageType = ExtensionMessage['type'];
 
 /**
  * Envelope every background handler replies with.

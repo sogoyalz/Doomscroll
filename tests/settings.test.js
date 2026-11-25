@@ -78,12 +78,14 @@ describe('getSettings', () => {
 
   it('falls back to defaults when storage is unreachable', async () => {
     failNextGet = true;
-    expect(await getSettings()).toEqual(DEFAULT_SETTINGS);
+    expect((await getSettings()).trackingEnabled).toBe(false);
+    failNextGet = true;
+    await expect(updateSettings({ debugHud: true })).rejects.toThrow();
   });
 
   it('ignores a corrupted non-object value', async () => {
     store['doomscroll:settings'] = 'not an object';
-    expect(await getSettings()).toEqual(DEFAULT_SETTINGS);
+    expect((await getSettings()).trackingEnabled).toBe(false);
   });
 });
 
@@ -207,7 +209,7 @@ describe('settings are validated on the way in', () => {
 
   it('refuses a non-boolean for the switches', async () => {
     const s = await bad({ trackingEnabled: 'yes', interventionEnabled: 1 });
-    expect(s.trackingEnabled).toBe(DEFAULT_SETTINGS.trackingEnabled);
+    expect(s.trackingEnabled).toBe(false);
     expect(s.interventionEnabled).toBe(DEFAULT_SETTINGS.interventionEnabled);
   });
 

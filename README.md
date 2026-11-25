@@ -6,7 +6,9 @@
 
 **See what your Instagram Reels feed keeps showing you—and make room for a break.**
 
-Doomscroll is a local Chrome extension that records visible watch time, groups
+Doomscroll counts an exposure after 250 ms of cumulative visible time in a focused window. A revisit in either scroll direction counts again. New views retain their capture-day dates and divide watch time across local midnight. Older views use their start date in the current time zone.
+
+Doomscroll is a local Chrome extension that records focused watch time, groups
 reels by text-derived categories, and flags when your feed becomes unusually
 repetitive compared with your own recent history. A compact dashboard makes
 viewing patterns easier to inspect; optional prompts help you step away.
@@ -20,7 +22,7 @@ Publishing to the Chrome Web Store follows [docs/store-listing.md](docs/store-li
 Copy that listing as written. Do not add claims the privacy policy does not
 already make.
 
-**Version 1.1.1 · Manifest V3 · Chrome 116+ · All rights reserved**
+**Version 1.1.2 · Manifest V3 · Chrome 116+ · All rights reserved**
 
 > **Release candidate:** automated tests cover the application and packaged
 > extension. Live Instagram acceptance testing is only partially complete, and
@@ -326,7 +328,7 @@ dependencies; use `npx playwright install --with-deps chromium`.
 | `npm run lint`           | Check source with ESLint                                               |
 | `npm test`               | Run unit and integration tests and print V8 coverage                   |
 | `npm run test:browser`   | Test the existing release ZIP in Chromium; run `npm run package` first |
-| `npm run package`        | Build and create `doomscroll-1.1.1.zip` with a SHA-256 sidecar         |
+| `npm run package`        | Build and create `doomscroll-1.1.2.zip` with a SHA-256 sidecar         |
 | `npm run package:verify` | Build independently twice and check that archive bytes match           |
 | `npm run security:check` | Scan committed Git history for secrets and private-data files          |
 | `npm audit`              | Check dependency advisories                                            |
@@ -362,7 +364,7 @@ behavior for those inputs, not compatibility with every live layout.
 
 | Symptom                              | What to check                                                                                                                                               |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No reels recorded                    | Load `dist/`, enable tracking, refresh Instagram after extension reload, and stay on a reel longer than 250 ms before moving on.                            |
+| No reels recorded                    | Load `dist/`, enable tracking, refresh Instagram after extension reload, and keep the Reel visible in the focused window for at least 250 ms before moving on.                            |
 | Pattern detection is still learning  | It needs seven nonempty historical days and enough charged samples within the trailing fourteen days; today does not count toward that baseline.            |
 | No prompt despite a detected pattern | Check opt-in, the selected categories, streak length, current break, per-session limits, and cooldowns.                                                     |
 | Notifications do not appear          | In Settings → Interventions, click **Test desktop notification**. You can run the test before you have a viewing baseline. If Chrome accepts it but no banner appears, check system notification settings for Chrome and Focus or Do Not Disturb. |

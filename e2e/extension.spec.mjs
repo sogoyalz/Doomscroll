@@ -78,9 +78,10 @@ async function launchProfile() {
   const extension = join(profile, 'packaged-extension');
   context = await chromium.launchPersistentContext(profile, {
     channel: 'chromium',
+    executablePath: process.env.DOOMSCROLL_CHROME_PATH,
     headless: true,
     viewport: { width: 1280, height: 800 },
-    args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
+    args: [...(process.env.DOOMSCROLL_CHROME_PATH ? ['--headless=new'] : []), `--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
   });
   worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
   extensionId = new URL(worker.url()).host;
@@ -472,6 +473,10 @@ test('exports recorded views and deletion removes the persisted data', async () 
   const exported = await send('EXPORT_DATA', { which: 'reels' });
   expect(exported.filename).toBe('doomscroll-reels.csv');
   expect(exported.csv).toContain('SYNTHETIC00');
+  const downloadReady = options.waitForEvent('download');
+  await options.getByRole('button', { name: 'Export reels', exact: true }).click();
+  const download = await downloadReady;
+  expect(readFileSync(await download.path(), 'utf8')).toBe(exported.csv);
   await send('CLEAR_DATA');
   expect(await events()).toHaveLength(0);
   await options.reload();
@@ -573,11 +578,12 @@ test('human topic and tone reviews persist through reload and appear in export',
   await options.locator('.session-head').first().click();
   await options.locator('.reel-review summary').first().click();
   const review = options.locator('.reel-review').first();
-  await expect(review).toContainText('Suggested tone: sad');
+  await expect(review).not.toContainText('Suggested tone:');
   await review.getByLabel('Correct topic').selectOption('music');
   await review.getByLabel('Correct tone').selectOption('romantic');
   await review.getByRole('button', { name: 'Save review' }).click();
   await expect(review.getByRole('status')).toHaveText('Saved review');
+  await expect(review).toContainText('Suggested tone: sad');
   await options.reload();
   await options.locator('.session-head').first().click();
   await options.locator('.reel-review summary').first().click();
@@ -672,7 +678,7 @@ async function nearFirstReminder() {
     chrome.permissions.contains({ permissions: ['notifications'] }); });
   await options.getByLabel('Remind me after').selectOption('1');
   await expect.poll(async () => (await send('GET_SETTINGS')).timeReminderMinutes).toBe(1);
-  await options.evaluate(() => chrome.storage.local.set({
+  if (!process.env.DOOMSCROLL_REAL_MINUTE) await options.evaluate(() => chrome.storage.local.set({
     'doomscroll:timeReminder': {
       limitMinutes: 1, spentMs: 58000, targetMs: 60000,
       lastEnd: Date.now(), reminderId: null, delivered: false,
@@ -684,9 +690,10 @@ async function nearFirstReminder() {
 }
 
 test('first-session time limit opens an in-feed reminder and snoozes without a baseline', async () => {
+  if (process.env.DOOMSCROLL_REAL_MINUTE) test.setTimeout(100000);
   const page = await nearFirstReminder();
   const dialog = page.getByRole('dialog', { name: 'Time for your Reels break?' });
-  await expect(dialog).toBeVisible({ timeout: 15000 });
+  await expect(dialog).toBeVisible({ timeout: process.env.DOOMSCROLL_REAL_MINUTE ? 80000 : 15000 });
   await expect(dialog).toContainText('1 minute of active Reel time');
   await dialog.getByRole('button', { name: 'Snooze 5 minutes' }).click();
   await expect(dialog).toHaveCount(0);

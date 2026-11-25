@@ -12,9 +12,9 @@
 import { LEXICON, TIE_BREAK_ORDER, type ClassifiableCategory } from './lexicon.js';
 import { TOPIC_CATEGORIES, CHARGED_CATEGORIES, isCharged } from './taxonomy.js';
 import type { ClassificationResult } from './types.js';
-import { cleanCaption } from './caption.js';
+import { captionSignals } from './caption.js';
 
-export { cleanCaption };
+export { cleanCaption } from './caption.js';
 
 export interface ClassifierInput {
   captionText: string | null;
@@ -116,7 +116,7 @@ function scoreText(
 
   // Padding lets a plain includes() act as a word-boundary check without
   // relying on \b, which behaves poorly outside ASCII.
-  const padded = ` ${normalized} `;
+  const padded = ` ${normalized.replace(/[^\p{L}\p{N}\p{M}']+/gu, ' ').trim()} `;
   for (const phrase of lexicon.phrases) {
     if (padded.includes(` ${phrase} `)) {
       const points = WEIGHT_PHRASE * weightFactor;
@@ -181,7 +181,7 @@ function scoreCategory(category: ClassifiableCategory, input: ClassifierInput): 
 }
 
 function cleanInput(input: ClassifierInput): ClassifierInput {
-  return { ...input, captionText: cleanCaption(input.captionText) };
+  return { ...input, ...captionSignals(input.captionText, input.hashtags) };
 }
 
 /**
@@ -196,11 +196,8 @@ const SONG_TOPICS: readonly ClassifiableCategory[] = ['music', 'dance'];
 
 /** True when there is nothing at all for the classifier to read. */
 export function hasSignal(input: ClassifierInput): boolean {
-  return Boolean(
-    normalize(input.captionText ?? '') ||
-    normalize(input.audioName ?? '') ||
-    input.hashtags.length,
-  );
+  const signals = cleanInput(input);
+  return Boolean(signals.captionText || normalize(input.audioName ?? '') || signals.hashtags.length);
 }
 
 /**
@@ -212,8 +209,8 @@ export function hasSignal(input: ClassifierInput): boolean {
  * reels can never pass as a calm one.
  */
 export function classify(raw: ClassifierInput): ClassificationResult | null {
+  if (!hasSignal(raw)) return null;
   const input = cleanInput(raw);
-  if (!hasSignal(input)) return null;
 
   const scores = TIE_BREAK_ORDER.map((category) => ({
     category,
@@ -301,13 +298,7 @@ export function classifyDimensions(raw: ClassifierInput): {
   topic: string | null;
   tone: string | null;
 } {
-  // Hashtags are extracted separately: do not count the same tag as prose too.
-  const input = cleanInput(raw);
-  const authored = {
-    ...input,
-    captionText: input.captionText?.replace(/#[\p{L}\p{N}\p{M}_]+/gu, '') ?? null,
-    audioName: null,
-  };
+  const authored = { ...cleanInput(raw), audioName: null };
   const choose = (categories: readonly ClassifiableCategory[]) => {
     const ranked = categories
       .map((category) => ({

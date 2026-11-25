@@ -43,7 +43,7 @@ import { keepPendingView } from '@shared/pending-views.js';
 import { noteStorageFailure } from '@shared/storage-health.js';
 import { deliverReelView } from '@shared/deliver-view.js';
 import { syncLayoutWarning } from './layout-warning.js';
-import { getSettings, SETTINGS_KEY } from '@shared/settings.js';
+import { readSettings, SETTINGS_KEY } from '@shared/settings.js';
 import { SAMPLE_MS, TIME_REMINDER_KEY, readTimeBudget } from '@shared/time-reminder.js';
 import { send } from '@shared/client.js';
 import type { ExtensionMessage } from '@shared/messages.js';
@@ -71,7 +71,7 @@ const snapshots = new WeakMap<HTMLElement, ExtractedReel>();
 
 const tracker = createDwellTracker<HTMLElement>(handleCompletedView);
 
-let observed = new WeakSet<HTMLElement>();
+const observed = new Set<HTMLElement>();
 let intersectionObserver: IntersectionObserver | null = null;
 let mutationObserver: MutationObserver | null = null;
 let mutationRoot: Node | null = null;
@@ -88,10 +88,14 @@ let limitMinutes = 0;
 let timeDialogId: string | null = null;
 let activeSince: number | null = null;
 
-function timerEligible(): boolean {
-  return limitMinutes > 0 && observing && !unloaded && !document.hidden && document.hasFocus() &&
-    isTrackingSurface(location.pathname) && tracker.currentTarget() !== null && !isOverlayShowing() &&
+function focusedExposure(): boolean {
+  return observing && !unloaded && !document.hidden && document.hasFocus() &&
+    isTrackingSurface(location.pathname) && !isOverlayShowing() &&
     !(activeBreak && Date.now() < activeBreak.endsAt);
+}
+
+function timerEligible(): boolean {
+  return limitMinutes > 0 && focusedExposure() && tracker.currentTarget() !== null;
 }
 
 // Flush on blur/hide as well as heartbeat, so short foreground visits count.
@@ -117,7 +121,7 @@ function syncTimeBudget(now: number): void {
  * make the feed janky while scrolling.
  */
 function scheduleSync(): void {
-  if (syncScheduled || !observing) return;
+  if (syncScheduled || !observing || document.hidden) return;
   syncScheduled = true;
   requestAnimationFrame(() => {
     syncScheduled = false;
@@ -137,9 +141,15 @@ function syncActiveReel(now: number = Date.now(), refresh = false): void {
     stopObserving();
     return;
   }
+  if (document.hidden) return;
   const containers = reelContainers(refresh);
 
   if (intersectionObserver) {
+    for (const target of observed) {
+      if (target.isConnected) continue;
+      intersectionObserver.unobserve(target);
+      observed.delete(target);
+    }
     for (const container of containers) {
       if (observed.has(container)) continue;
       observed.add(container);
@@ -263,6 +273,7 @@ async function reportView(
     id: crypto.randomUUID(),
     reelShortcode: reel.identity,
     sessionId: UNASSIGNED_SESSION_ID,
+    calendar: view.calendar,
     startedAt: view.startedAt,
     endedAt: view.endedAt,
     watchDurationMs: view.watchDurationMs,
@@ -295,6 +306,7 @@ async function reportView(
     fromFiber: reel.shortcodeSource === 'fiber',
     audioChannel: reel.audioChannel,
     bridgeStatus: bridgeStatus(),
+    startedAt: view.startedAt,
     now: view.endedAt,
   }).catch(() => {
     // A missed health sample must not surface in the page console.
@@ -345,11 +357,29 @@ function stopObserving(): void {
   containerList = null;
   // Resuming should re-bind immediately rather than sit out the backoff.
   lastScrollScanAt = 0;
-  observed = new WeakSet();
+  observed.clear();
 }
 
+let settingsRequest = 0;
+let retryDelay = 1000;
+let retrySettings: ReturnType<typeof setTimeout> | undefined;
+
 async function applyTrackingSetting(): Promise<void> {
-  const settings = await getSettings();
+  const request = ++settingsRequest;
+  clearTimeout(retrySettings);
+  const settings = await readSettings().catch(() => null);
+  if (request !== settingsRequest || unloaded) return;
+  if (!settings) {
+    trackingEnabled = false;
+    activeSince = null;
+    document.documentElement.setAttribute(TRACKING_ATTR, 'off');
+    stopObserving();
+    unmountHud();
+    retrySettings = setTimeout(() => void applyTrackingSetting(), retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 60000);
+    return;
+  }
+  retryDelay = 1000;
   if (limitMinutes !== settings.timeReminderMinutes || !settings.trackingEnabled) activeSince = null;
   limitMinutes = settings.timeReminderMinutes;
   trackingEnabled = settings.trackingEnabled;
@@ -390,7 +420,7 @@ async function applyTrackingSetting(): Promise<void> {
  */
 function syncDwellClock(now: number = Date.now()): void {
   syncTimeBudget(now);
-  if (document.hidden || isOverlayShowing()) tracker.pause(now);
+  if (!focusedExposure()) tracker.pause(now);
   else tracker.resume(now);
 }
 
@@ -485,7 +515,7 @@ async function refreshBreak(): Promise<void> {
  */
 function checkBreak(now: number): void {
   syncBreakReminder(activeBreak, now);
-  if (isOverlayShowing() || !isReelsSurface(location.pathname)) return;
+  if (isOverlayShowing() || (!isReelsSurface(location.pathname) && !tracker.currentTarget())) return;
   if (!shouldRemind(activeBreak, now) || !activeBreak) return;
 
   showBreakReminder({
@@ -508,16 +538,27 @@ function checkBreak(now: number): void {
 }
 
 function start(): void {
+  let missingPlayerSince: number | null = null;
   const onHeartbeat = () => {
     if (trackingEnabled && isTrackingSurface(location.pathname)) startObserving();
     else stopObserving();
-    if (!observing) return;
+    if (!observing || document.hidden || !document.hasFocus()) {
+      missingPlayerSince = null;
+      return;
+    }
     const now = Date.now();
     ensureObservationTargets(now);
 
     syncActiveReel(now, true);
     reconcileActiveReel(now);
-    syncLayoutWarning(bridgeStatus() === 'no-fiber');
+    const missingPlayer = !tracker.currentTarget() && isReelsSurface(location.pathname) &&
+      Array.from(document.querySelectorAll('video')).some(video => {
+        const box = video.getBoundingClientRect();
+        return box.width > 0 && box.bottom > 0 && box.top < innerHeight && box.height > 0;
+      });
+    missingPlayerSince = missingPlayer ? missingPlayerSince ?? now : null;
+    syncLayoutWarning(bridgeStatus() === 'no-fiber' ||
+      (missingPlayerSince !== null && now - missingPlayerSince >= 5000));
     checkBreak(now);
     // Cheap, and the only thing that notices an overlay being dismissed by a
     // path that does not route through here.
@@ -525,8 +566,8 @@ function start(): void {
   };
   let heartbeat = setInterval(onHeartbeat, HEARTBEAT_MS);
 
-  window.addEventListener('focus', () => syncTimeBudget(Date.now()));
-  window.addEventListener('blur', () => syncTimeBudget(Date.now()));
+  window.addEventListener('focus', () => syncDwellClock());
+  window.addEventListener('blur', () => syncDwellClock());
   document.addEventListener('visibilitychange', () => syncDwellClock());
 
   // React to the pause switch being flipped from the popup or options page,
@@ -558,8 +599,7 @@ function start(): void {
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (sender.id !== chrome.runtime.id) return false;
     if (message?.type === 'PATTERN_REMINDER_READY') {
-      respond(observing && !document.hidden && document.hasFocus() &&
-        isTrackingSurface(location.pathname) && tracker.currentTarget() !== null && !isOverlayShowing());
+      respond(focusedExposure() && tracker.currentTarget() !== null);
       return false;
     }
     if (message?.type === 'TIME_REMINDER_READY') {
@@ -607,7 +647,7 @@ function start(): void {
 
     // Nothing is shown over a paused tracker: the user has already said they
     // do not want this extension acting right now.
-    if (!observing || !isTrackingSurface(location.pathname) || document.hidden || isOverlayShowing()) {
+    if (!focusedExposure() || !tracker.currentTarget()) {
       sendResponse({ ok: true, data: { shown: false } });
       return false;
     }

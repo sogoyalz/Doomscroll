@@ -37,6 +37,7 @@ interface OverlayOptions {
   timeLimit?: { minutes: number; onSnooze: () => void };
 }
 
+let previousFocus: Element | null = null;
 let host: HTMLElement | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let breakDialog: { id: string; body: HTMLElement } | null = null;
@@ -178,6 +179,7 @@ export function showOverlay(options: OverlayOptions): void {
 
   pauseVideos();
 
+  previousFocus = document.activeElement;
   host = document.createElement('div');
   host.id = HOST_ID;
   const root = host.attachShadow({ mode: 'open' });
@@ -290,6 +292,8 @@ export function hideOverlay(): void {
   releaseKeyboard();
   host?.remove();
   host = null;
+  if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
+  previousFocus = null;
 }
 
 export function isOverlayShowing(): boolean {
@@ -314,6 +318,7 @@ export function showBreakReminder(options: {
 
   pauseVideos();
 
+  previousFocus = document.activeElement;
   host = document.createElement('div');
   host.id = HOST_ID;
   const root = host.attachShadow({ mode: 'open' });
@@ -330,6 +335,8 @@ export function showBreakReminder(options: {
   card.setAttribute('aria-modal', 'true');
 
   const heading = document.createElement('h2');
+  heading.id = 'break-title';
+  card.setAttribute('aria-labelledby', heading.id);
   heading.textContent = 'You asked for a break';
 
   const body = document.createElement('p');

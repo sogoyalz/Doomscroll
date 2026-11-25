@@ -113,5 +113,5 @@ export function isBreakState(value: unknown): value is BreakState {
  * weaker question asked here: which surface am I on.
  */
 export function isReelsSurface(pathname: string): boolean {
-  return pathname === '/reels' || pathname.startsWith('/reels/');
+  return pathname === '/reels' || pathname.startsWith('/reels/') || pathname.startsWith('/reel/');
 }

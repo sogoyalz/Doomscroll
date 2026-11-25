@@ -12,11 +12,14 @@
 import { getSettings } from '@shared/settings.js';
 import { createSerialQueue } from '@shared/serial.js';
 
+import { sessionNear } from './db.js';
+
 export const SESSION_KEY = 'doomscroll:session';
 const serialize = createSerialQueue();
 
 interface SessionState {
   id: string;
+  startedAt?: number;
   lastActivityAt: number;
 }
 
@@ -64,11 +67,15 @@ async function resolveSession(
   }
 
   const previous = isSessionState(stored) ? stored : null;
+  if (previous && now < (previous.startedAt ?? previous.lastActivityAt) - gapMs) {
+    return (await sessionNear(startedAt, now, gapMs)) ?? crypto.randomUUID();
+  }
   const expired = !previous || startedAt - previous.lastActivityAt > gapMs;
   const id = expired ? crypto.randomUUID() : previous.id;
 
   const next: SessionState = {
     id,
+    startedAt: expired ? startedAt : Math.min(previous.startedAt ?? previous.lastActivityAt, startedAt),
     lastActivityAt: Math.max(now, previous?.lastActivityAt ?? now),
   };
   try {

@@ -309,6 +309,9 @@ describe('lexicon integrity', () => {
 });
 
 describe('hasSignal', () => {
+  it.each(['#fyp', '@creator', 'https://example.com'])('abstains on %s alone', (captionText) => {
+    expect(classify(input({ captionText }))).toBeNull();
+  });
   it('is false for a fully empty reel', () => {
     expect(hasSignal(input())).toBe(false);
   });
@@ -451,7 +454,9 @@ describe('love songs, cut-off captions, and study content', () => {
   });
   it('names study and career advice as learning', () => {
     expect(
-      classify(input({ captionText: 'A professor marked up this cold email at our career fair' })).category,
+      classify(
+        input({ captionText: 'A professor marked up this cold email at our career fair' }),
+      ).category,
     ).toBe('learning');
     expect(
       classify(input({ captionText: 'resume mistakes', hashtags: ['resumetips'] })).category,
@@ -488,4 +493,23 @@ it('does not read a personal "series" of videos as a TV show', () => {
     classify({ captionText: 'best web series of the year', hashtags: [], audioName: null })
       .category,
   ).toBe('entertainment');
+});
+
+describe('topic evidence in captions', () => {
+  it.each([
+
+    ['A parody of the weather forecast #explore', ['explore'], 'comedy'],
+    ['Let us explore the new software.', [], 'tech'],
+    ['Packing for a flight back to my hometown. #explore', ['explore'], 'travel'],
+    ['Finally back in my home country!', [], 'travel'],
+    ['Changes to the syllabus for next semester.', [], 'learning'],
+  ])('classifies %s', (captionText, hashtags, category) => {
+    expect(classify(input({ captionText, hashtags })).category).toBe(category);
+  });
+
+  it('scores a caption hashtag once even when Instagram also supplies it as a link', () => {
+    const tagsOnly = classify(input({ hashtags: ['singer'] }));
+    expect(classify(input({ captionText: '#singer', hashtags: ['Singer'] }))).toEqual(tagsOnly);
+    expect(classify(input({ captionText: '#singer' }))).toEqual(tagsOnly);
+  });
 });

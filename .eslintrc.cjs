@@ -37,12 +37,13 @@ module.exports = {
       },
     },
     {
-      files: ['*.cjs', '*.config.js', '*.config.ts'],
+      files: ['**/*.mjs', '*.cjs', '*.config.js', '*.config.ts'],
       env: { node: true },
     },
   ],
   ignorePatterns: [
     'dist/',
+    'public/runtime/',
     'node_modules/',
     '.workspace-backup/',
     '.dev/',

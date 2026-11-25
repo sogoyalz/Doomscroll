@@ -40,7 +40,7 @@ globalThis.chrome = {
     async getPermissionLevel() {
       return 'granted';
     },
-    async create(options) {
+    async create(id, options) {
       notifications.push(options);
     },
   },
@@ -117,8 +117,7 @@ describe('maybeIntervene', () => {
   it('describes the feed in the notification, never the person', async () => {
     await maybeIntervene(detection({ streak: 7 }), on, 'session-1', 1, NOW);
     const { message } = notifications[0];
-    expect(message).toContain('7');
-    expect(message).toContain('sad content');
+    expect(message).not.toMatch(/sad|streak|7/);
     expect(message).not.toMatch(/\byou (are|seem|feel|look)\b/i);
   });
 

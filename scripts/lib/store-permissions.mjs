@@ -6,7 +6,7 @@ import { join } from 'node:path';
 
 export const DECLARED_PERMISSIONS = ['alarms', 'storage', 'offscreen'];
 export const OPTIONAL_PERMISSIONS = ['notifications'];
-export const HOST_PERMISSIONS = ['https://*.instagram.com/*'];
+export const HOST_PERMISSIONS = ['https://www.instagram.com/*'];
 
 const FORBIDDEN = [
   { pattern: /\bfetch\s*\(/, label: 'network fetch' },

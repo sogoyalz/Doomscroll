@@ -10,6 +10,25 @@ function setup(options) {
 }
 
 describe('createDwellTracker', () => {
+  it('assigns eligible milliseconds on each side of midnight', () => {
+    const { tracker, completed } = setup();
+    const midnight = new Date(2026, 7, 5).getTime();
+    tracker.setActive('a', midnight - 3000);
+    tracker.pause(midnight - 1000);
+    tracker.resume(midnight + 1000);
+    tracker.flush(midnight + 4000);
+    expect(completed[0].calendar.watchMsByDay).toEqual({ '2026-08-04': 2000, '2026-08-05': 3000 });
+  });
+
+  it.each(['flush', 'replace'])('ends a paused view at blur on %s', (action) => {
+    const { tracker, completed } = setup();
+    tracker.setActive('a', 0);
+    tracker.pause(1000);
+    if (action === 'flush') tracker.flush(8 * 3600000);
+    else tracker.setActive('b', 8 * 3600000);
+    expect(completed[0]).toMatchObject({ endedAt: 1000, watchDurationMs: 1000 });
+  });
+
   it('records a view when the active reel changes', () => {
     const { tracker, completed } = setup();
     tracker.setActive('a', 0);

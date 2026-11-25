@@ -72,10 +72,11 @@ export function categoryBreakdown(events: ReelEvent[]): Record<string, number> {
 export function groupByLocalDay(events: ReelEvent[]): Map<string, ReelEvent[]> {
   const days = new Map<string, ReelEvent[]>();
   for (const event of events) {
-    const key = localDateKey(event.startedAt);
-    const bucket = days.get(key);
-    if (bucket) bucket.push(event);
-    else days.set(key, [event]);
+    for (const key of event.captureDays ?? [localDateKey(event.startedAt)]) {
+      const bucket = days.get(key);
+      if (bucket) bucket.push(event);
+      else days.set(key, [event]);
+    }
   }
   return days;
 }
@@ -94,7 +95,8 @@ export function aggregateDay(
   events: ReelEvent[],
   gapMs: number = DEFAULT_BINGE_GAP_MS,
 ): DailyAggregate {
-  const totalMs = events.reduce((sum, e) => sum + e.watchDurationMs, 0);
+  const totalMs = events.reduce((sum, e) => sum + (e.calendar ? e.calendar.watchMsByDay[date] ?? 0 : e.watchDurationMs), 0);
+  events = events.filter(e => !e.calendar || e.calendar.startDay === date);
   const totalSeconds = totalMs / 1000;
 
   return {

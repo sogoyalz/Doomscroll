@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** 23 November 2026
+**Last updated:** 24 November 2026
 
 Doomscroll is a Chrome extension that tracks which Instagram Reels you watch
 and flags when the feed is serving you a repetitive stream of similar content.
@@ -23,7 +23,7 @@ Stored locally in your browser (IndexedDB and `chrome.storage.local`):
 | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
 | Reel identifier (shortcode, or creator handle + video filename when no shortcode resolves)                                     | To tell one reel from another                                                       |
 | Caption text, hashtags, audio track name                                                                                       | The only signal available for categorising content                                  |
-| Watch duration, start and end time                                                                                             | Watch-time stats and binge detection                                                |
+| Focused watch duration, start and end time, capture time zone, and milliseconds per local date                                                                                             | Daily watch-time totals and session duration                                                |
 | Session identifier (a random UUID)                                                                                             | To group a continuous stretch of scrolling                                          |
 | Assigned category and confidence                                                                                               | The dashboard breakdown                                                             |
 | Detection log entries                                                                                                          | So you can review what the detector would have flagged                              |
@@ -31,6 +31,8 @@ Stored locally in your browser (IndexedDB and `chrome.storage.local`):
 | Interruption records (level, what prompted it, what you did about it, confirmed delivery and any request to end a break early) | So you can review intervention decisions and responses                              |
 | Whether the last save failed                                                                                                   | So the dashboard can say "reels aren't being saved" instead of showing an empty day |
 | Your settings                                                                                                                  | To remember your preferences                                                        |
+
+Capture-health counters and the last observation time help identify missing captions, creator handles, audio, or Reel identifiers. Deleting history clears these diagnostics.
 
 Human topic/tone reviews, model identifiers, and uncertainty/fallback status are
 stored with each reel and included in exports. Reviews are deleted with history
@@ -59,13 +61,11 @@ exports.
 | `storage`                    | Save your settings and viewing history locally                                                                                                                                                                                                                                                                  |
 | `alarms`                     | Run daily maintenance (rolling up stats, deleting old data) — a Manifest V3 background worker is shut down when idle and cannot use timers for this                                                                                                                                                             |
 | `notifications` _(optional)_ | Show a desktop break reminder when you enable interventions, or a single sample when you choose **Test desktop notification** in versions with that control. Personalized reminders require a viewing baseline. An optional Reels timer works from the first session and saves elapsed active time, its target and delivery status locally. Pausing tracking, changing the timer or deleting viewing data clears this progress. The sample uses fixed text and creates no viewing or intervention record. |
-| `https://*.instagram.com/*`  | Read reel captions on the page. This is the only site the extension runs on                                                                                                                                                                                                                                     |
+| `https://www.instagram.com/*`  | Read reel captions on the page. This is the only site the extension runs on                                                                                                                                                                                                                                     |
 
 ## How long data is kept
 
-Raw per-reel history is deleted after **90 days**. Daily summaries are kept
-longer, because comparing today against your own past is the whole point of
-the detection, and summaries contain counts rather than captions.
+Daily maintenance removes raw views older than **90 local days**. Daily summaries contain counts and viewing time and remain until you delete your history.
 
 Completed views may temporarily be queued in local storage to recover failed
 message delivery. Pending copies expire after **24 hours** and are removed

@@ -52,6 +52,16 @@ globalThis.chrome = {
   },
 };
 
+it('preserves the captured dates and splits midnight minutes without a second view', async () => {
+  const event = makeEvent(noon(2026, 8, 3), 5000);
+  event.calendar = { zone: 'Pacific/Auckland', startDay: '2026-08-04',
+    watchMsByDay: { '2026-08-04': 1000, '2026-08-05': 4000 } };
+  await recordReelView(event);
+  expect(await recomputeDay('2026-08-04')).toMatchObject({ totalReels: 1, totalMinutes: 1 / 60 });
+  expect(await recomputeDay('2026-08-05')).toMatchObject({ totalReels: 0, totalMinutes: 4 / 60 });
+  expect(await recomputeDay('2026-08-03')).toMatchObject({ totalReels: 0, totalMinutes: 0 });
+});
+
 let nextId = 0;
 
 function makeEvent(startedAt, durationMs = 5000) {

@@ -51,7 +51,7 @@ try {
       if (!response?.ok) throw new Error('Demo event could not be recorded');
     }
   });
-  async function label(target) {
+  const label = async (target) => {
     await target.evaluate(() => {
       const banner = document.createElement('div');
       banner.textContent = 'DEMONSTRATION — SYNTHETIC DATA • No personal viewing history';
@@ -59,19 +59,23 @@ try {
         'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;background:#17261f;color:#fff;padding:12px;text-align:center;font:14px system-ui;';
       document.body.append(banner);
     });
-  }
+  };
+  await page.evaluate(async () => {
+    const result = await chrome.runtime.sendMessage({type: 'UPDATE_SETTINGS', payload: {timeReminderMinutes: 10}});
+    if (!result?.ok) throw new Error('Could not set the synthetic time goal');
+  });
   await page.reload();
   await page.getByLabel('Record the reels I watch').waitFor();
   await label(page);
-  await page.screenshot({ path: join(output, 'settings-demo.png') });
+  await page.screenshot({ animations: 'disabled', path: join(output, 'settings-demo.png') });
   const popup = await context.newPage();
   await popup.goto(`chrome-extension://${id}/src/popup/index.html`);
-  await popup.getByRole('heading', { name: 'Doomscroll' }).waitFor();
+  await popup.locator('.hero-value').waitFor();
   await popup.evaluate(() => {
     document.body.style.margin = '30px auto';
   });
   await label(popup);
-  await popup.screenshot({ path: join(output, 'dashboard-demo.png') });
+  await popup.screenshot({ animations: 'disabled', path: join(output, 'dashboard-demo.png') });
   console.log('Saved two 1280×800 screenshots of the packaged UI using synthetic data only.');
 } finally {
   await context.close();

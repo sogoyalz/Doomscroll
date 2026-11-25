@@ -1,4 +1,8 @@
+export type Abstention = 'unsure' | 'other';
 export interface ReelReview {
+  method?: 'hidden-prediction' | 'correction';
+  topicAbstention?: Abstention;
+  toneAbstention?: Abstention;
   engine?: string;
   topic: string | null;
   tone: string | null;
@@ -17,7 +21,16 @@ export interface ClassificationDetails {
   status: 'classified' | 'uncertain' | 'fallback';
 }
 
+export interface CaptureCalendar {
+  startDay: string;
+  zone: string;
+  watchMsByDay: Record<string, number>;
+}
+
 export interface ReelEvent {
+  calendar?: CaptureCalendar;
+  /** Indexed local days containing the start or an eligible interval. */
+  captureDays?: string[];
   classificationDetails?: ClassificationDetails;
   /** Human labels kept separate from predictions; deleted with the reel. */
   review?: ReelReview;

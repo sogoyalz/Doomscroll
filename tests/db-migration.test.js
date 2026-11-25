@@ -16,7 +16,7 @@ beforeEach(async () => {
   });
 });
 
-describe('schema 4 → 5 upgrade', () => {
+describe('schema 4 → 6 upgrade', () => {
   it('indexes existing events without losing history or mixing sessions', async () => {
     await new Promise((resolve, reject) => {
       const open = indexedDB.open('doomscroll', 4);
@@ -46,7 +46,7 @@ describe('schema 4 → 5 upgrade', () => {
       open.onerror = () => reject(open.error);
     });
     const db = await getDB();
-    expect(db.version).toBe(5);
+    expect(db.version).toBe(6);
     expect(await db.count('reelEvents')).toBe(26);
     expect((await getRecentSessionEvents('old-session', 15)).map((event) => event.id)).toEqual(
       Array.from({ length: 15 }, (_, i) => `old-${24 - i}`),

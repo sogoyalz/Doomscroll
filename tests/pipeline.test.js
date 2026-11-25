@@ -237,6 +237,7 @@ it('delivers a block when pending recovery saves the triggering view before its 
   const last = event(19);
   await keepPendingView(last);
   alarm({ name: 'doomscroll:delivery' });
+  await vi.waitFor(async () => expect(await readPendingViews()).toHaveLength(0));
   await send('GET_STATS', { range: 'today' }, extensionPage);
   expect(await getAllReelEvents()).toHaveLength(20);
   expect(tabMessages).toHaveLength(0);

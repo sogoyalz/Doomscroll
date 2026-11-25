@@ -12,6 +12,7 @@
 
 import {
   getAllReelEvents,
+  getDB,
   getDailyAggregates,
   getReelEvents,
   putDailyAggregate,
@@ -27,7 +28,9 @@ export const DIRTY_DAYS_KEY = 'doomscroll:dirtyDays';
 /** Recomputes one local day from its events and persists the result. */
 export async function recomputeDay(dateKey: string, gapMs?: number): Promise<DailyAggregate> {
   const { from, to } = localDayRange(dateKey);
-  const events = await getReelEvents(from, to);
+  const [legacy, captured] = await Promise.all([getReelEvents(from, to),
+    (await getDB()).getAllFromIndex('reelEvents', 'by-capture-day', dateKey)]);
+  const events = [...legacy.filter(event => !event.calendar), ...captured];
   const aggregate = aggregateDay(dateKey, events, gapMs);
   await putDailyAggregate(aggregate);
   return aggregate;
@@ -41,25 +44,6 @@ async function readDirtyDays(): Promise<string[]> {
       : [];
   } catch {
     return [];
-  }
-}
-
-/** Alarm that flushes the dirty days. */
-/**
- * Forgets the days awaiting a rollup.
- *
- * Only for wiping history. The dirty set is a queue of days to recompute, and
- * a day recomputed after its events are gone rolls up as a zero — so left
- * behind, a wipe quietly resurrects the deleted days as empty aggregates on
- * the next alarm. Detection survives that (the sample guard rejects them), but
- * the charts would show days that no longer exist.
- */
-export async function clearDirtyDays(): Promise<void> {
-  try {
-    await chrome.storage.local.remove(DIRTY_DAYS_KEY);
-  } catch {
-    // Worst case the stale days roll up as empty and are recomputed properly
-    // the next time anything is actually recorded on them.
   }
 }
 
@@ -95,8 +79,7 @@ export async function scheduleAggregateFlush(): Promise<void> {
  * stale aggregate until that day is touched again or read via GET_STATS,
  * which recomputes today anyway — not worth a lock.
  */
-export async function markDayDirty(timestamp: number): Promise<void> {
-  const dateKey = localDateKey(timestamp);
+export async function markDayDirty(timestamp: number, dateKey = localDateKey(timestamp)): Promise<void> {
   const dirty = await readDirtyDays();
   if (dirty.includes(dateKey)) return;
   try {
@@ -106,56 +89,15 @@ export async function markDayDirty(timestamp: number): Promise<void> {
   }
 }
 
-/**
- * Recomputes every day marked dirty.
- *
- * The set is cleared before the work runs, so a failure mid-flush drops those
- * marks. Days are re-marked on the next reel, and GET_STATS recomputes today
- * regardless, so the exposure is a stale aggregate for a quiet past day.
- */
+/** Called under the history queue. Keep each marker until its write commits. */
 export async function flushDirtyDays(gapMs?: number): Promise<string[]> {
   const dirty = await readDirtyDays();
-  if (!dirty.length) return [];
-
-  // Cleared before the work, not after, so a day marked dirty *during* the
-  // flush is not wiped by a write that finishes later.
-  try {
-    await chrome.storage.local.set({ [DIRTY_DAYS_KEY]: [] });
-  } catch {
-    // Proceed anyway: recomputing is idempotent, so a repeat is harmless.
-  }
-
-  // Clearing first has a cost: a throw partway through would lose every day
-  // not yet reached, and lose it permanently — the queue is already empty, so
-  // nothing would ever roll those days up again. An aggregate that is never
-  // written is a hole in the baseline detection is computed from, which is
-  // exactly the kind of silent, self-reinforcing loss this codebase has been
-  // bitten by before. Whatever is left goes back on the queue.
-  const done: string[] = [];
-  try {
-    for (const dateKey of dirty) {
-      await recomputeDay(dateKey, gapMs);
-      done.push(dateKey);
-    }
-  } catch (err) {
-    await requeueDays(dirty.filter((d) => !done.includes(d)));
-    throw err;
-  }
-
-  return done;
-}
-
-/** Puts days back on the queue, preserving any marked while we were away. */
-async function requeueDays(days: string[]): Promise<void> {
-  if (!days.length) return;
-  try {
+  for (const dateKey of dirty) {
+    await recomputeDay(dateKey, gapMs);
     const current = await readDirtyDays();
-    const merged = [...new Set([...current, ...days])];
-    await chrome.storage.local.set({ [DIRTY_DAYS_KEY]: merged });
-  } catch {
-    // Nothing left to try. The days roll up on the next write to them, or on
-    // the install-time backfill.
+    await chrome.storage.local.set({ [DIRTY_DAYS_KEY]: current.filter(day => day !== dateKey) });
   }
+  return dirty;
 }
 
 /**

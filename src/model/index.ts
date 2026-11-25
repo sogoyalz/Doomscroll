@@ -29,10 +29,20 @@ function load() {
   }));
 }
 const serial = createSerialQueue();
+let idleTimer: ReturnType<typeof setTimeout> | undefined;
+function releaseWhenIdle(): void {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => void serial(async () => {
+    const classifier = await ready;
+    ready = undefined;
+    await classifier?.dispose();
+  }).catch(() => undefined), 60000);
+}
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (message?.target !== 'doomscroll-model' || sender.id !== chrome.runtime.id || sender.tab)
     return false;
   void serial(async () => {
+    clearTimeout(idleTimer);
     const input = message.input as ClassifierInput;
     if (
       !input ||
@@ -52,7 +62,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       multi_label: false,
     })) as ModelScores;
     return modelResult(topic, tone);
-  }).then(
+  }).finally(releaseWhenIdle).then(
     (data) => respond({ ok: true, data }),
     () => respond({ ok: false, error: 'Local model inference failed' }),
   );

@@ -127,6 +127,9 @@ const VIEWPORT_HEIGHT_TOLERANCE = 0.1;
  */
 export function findReelContainers(root: ParentNode = document): HTMLElement[] {
   const players = [...root.querySelectorAll<HTMLElement>(VIDEO_PLAYER_SELECTOR)];
+  if (!players.length && /^\/reels?(?:\/|$)/.test(location.pathname)) {
+    players.push(...root.querySelectorAll<HTMLElement>('main video, [role="main"] video, [role="feed"] video'));
+  }
   if (!players.length) return [];
 
   // One parent walk for the whole screen. The old check ran querySelectorAll

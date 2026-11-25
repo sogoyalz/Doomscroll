@@ -16,6 +16,14 @@ export function isNewReelEvent(value: unknown): value is NewReelEvent {
   const nullableText = (s: unknown, max: number) =>
     s == null || (typeof s === 'string' && s.length <= max);
   return (
+    (e.calendar === undefined || (
+      e.calendar !== null && typeof e.calendar === 'object' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(e.calendar.startDay) && boundedString(e.calendar.zone, 128) &&
+      !!e.calendar.watchMsByDay && typeof e.calendar.watchMsByDay === 'object' &&
+      Object.entries(e.calendar.watchMsByDay).every(([day, ms]) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(ms) && ms >= 0) &&
+      Object.values(e.calendar.watchMsByDay).reduce((sum, ms) => sum + ms, 0) === e.watchDurationMs
+    )) &&
     boundedString(e.id, 256) &&
     boundedString(e.sessionId, 256) &&
     boundedString(e.reelShortcode, 2048) &&

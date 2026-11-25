@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Doomscroll",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Tracks which Instagram Reels you watch and flags when you're being shown a repetitive stream of similar content.",
   "homepage_url": "https://github.com/sogoyalz/Doomscroll",
   "minimum_chrome_version": "116",
@@ -10,19 +10,19 @@
   },
   "permissions": ["storage", "alarms", "offscreen"],
   "optional_permissions": ["notifications"],
-  "host_permissions": ["https://*.instagram.com/*"],
+  "host_permissions": ["https://www.instagram.com/*"],
   "background": {
     "service_worker": "src/background/index.ts",
     "type": "module"
   },
   "content_scripts": [
     {
-      "matches": ["https://*.instagram.com/*"],
+      "matches": ["https://www.instagram.com/*"],
       "js": ["src/content/index.ts"],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://*.instagram.com/*"],
+      "matches": ["https://www.instagram.com/*"],
       "js": ["src/content/main-world.ts"],
       "run_at": "document_idle",
       "world": "MAIN"

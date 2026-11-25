@@ -96,6 +96,8 @@ function intervene(payload = {}, sender = { id: 'doomscroll-test' }) {
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  dwell.currentTarget.mockReturnValue(document.body);
   store = {};
   nav.goTo.mockReset();
   dwell.pause.mockReset();

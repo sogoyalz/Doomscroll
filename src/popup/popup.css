@@ -11,7 +11,7 @@
   --line-soft: #1c1c21;
   --text: #edecef;
   --muted: #8b8b95;
-  --faint: #61616b;
+  --faint: #90909a;
   --accent: #dfae42;
   --alert: #cf5f4c;
 }
@@ -64,7 +64,7 @@ body {
 .tab {
   border: 0;
   background: transparent;
-  color: var(--faint);
+  color: var(--muted);
   font: inherit;
   font-size: 11px;
   font-weight: 500;
@@ -78,7 +78,7 @@ body {
   color: var(--muted);
 }
 
-.tab[aria-selected='true'] {
+.tab[aria-pressed='true'] {
   background: var(--surface);
   color: var(--text);
 }

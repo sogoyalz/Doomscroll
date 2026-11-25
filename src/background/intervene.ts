@@ -84,6 +84,7 @@ export async function maybeIntervene(
   sessionId: string,
   tabId: number | undefined,
   now: number = Date.now(),
+  documentId?: string,
 ): Promise<InterventionLevel | null> {
   // Nothing is read until it can matter. Two storage round trips per reel, at
   // a dozen reels a minute, for a feature that ships off and stays off for
@@ -124,8 +125,14 @@ export async function maybeIntervene(
   // delivery fails the row still exists with outcome 'pending', which is the
   // truth: something was decided and the user may never have seen it. Writing
   // it afterwards would silently lose exactly the failures worth counting.
-  const entry: InterventionLogEntry = {
-    id: crypto.randomUUID(),
+  const id = level === 'notify' ? `notify-${sessionId}` : crypto.randomUUID();
+  const prior = level === 'notify' ? await getInterventionById(id) : undefined;
+  if (prior?.deliveredAt != null) {
+    await writeState(recordFired(state, level, sessionId, prior.deliveredAt));
+    return null;
+  }
+  const entry: InterventionLogEntry = prior ?? {
+    id,
     at: now,
     sessionId,
     level,
@@ -142,8 +149,8 @@ export async function maybeIntervene(
   await putInterventionLog(entry);
   const delivered =
     level === 'notify'
-      ? await notify(detection, tabId)
-      : await sendToTab(tabId, entry.id, level, detection);
+      ? await notify(entry.id, tabId, documentId)
+      : await sendToTab(tabId, entry.id, level, detection, documentId);
   if (!delivered) return null;
   await putInterventionLog({ ...entry, deliveredAt: now });
   await writeState(recordFired(state, level, sessionId, now));
@@ -152,26 +159,12 @@ export async function maybeIntervene(
   return level;
 }
 
-/**
- * Copy rule, applied everywhere the user can read it: describe the feed, never
- * the viewer. "You seem sad" is not supportable by keyword counts over
- * captions, and would be a guess about someone's inner state delivered as a
- * finding.
- */
-function notificationText(detection: PatternDetection): string {
-  const what = detection.category ? `${detection.category} content` : 'similar content';
-  return (
-    `The last ${detection.streak} classified reels in a row have been ${what} — ` +
-    'more than your feed usually serves you.'
-  );
-}
-
-async function notify(detection: PatternDetection, tabId: number | undefined): Promise<boolean> {
+async function notify(id: string, tabId: number | undefined, documentId?: string): Promise<boolean> {
   if (tabId === undefined) return false;
-  const eligible = await chrome.tabs.sendMessage(tabId, { type: 'PATTERN_REMINDER_READY' })
+  const eligible = await chrome.tabs.sendMessage(tabId, { type: 'PATTERN_REMINDER_READY' }, documentId ? { documentId } : {})
     .catch(() => false);
   if (eligible !== true) return false;
-  const result = await showDesktopNotification('Your feed has narrowed', notificationText(detection));
+  const result = await showDesktopNotification('Ready for a pause?', 'Open Doomscroll to review your session.', id);
   return result === 'accepted';
 }
 
@@ -180,13 +173,14 @@ async function sendToTab(
   id: string,
   level: InterventionLevel,
   detection: PatternDetection,
+  documentId?: string,
 ): Promise<boolean> {
   if (tabId === undefined) return false;
   try {
     const reply = await chrome.tabs.sendMessage(tabId, {
       type: 'INTERVENE',
       payload: { id, level, category: detection.category, streak: detection.streak },
-    });
+    }, documentId ? { documentId } : {});
     return reply?.ok === true && reply.data?.shown === true;
   } catch {
     // The tab closed or navigated between the reel being reported and this

@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { TIME_REMINDER_KEY, readTimeBudget, type TimeBudget } from '@shared/time-reminder.js';
+import { localDateKey, startOfLocalDayBefore } from '@shared/time.js';
 import { send } from '@shared/client.js';
 import { UNCLASSIFIED } from '@shared/aggregation.js';
 import { isCharged } from '@shared/taxonomy.js';
@@ -191,14 +192,14 @@ export function Popup() {
 
   const load = useCallback(async () => {
     try {
-      const [ranged, month, extraction, settings, failure] = await Promise.all([
-        send('GET_STATS', { range }),
+      const [month, extraction, settings, failure] = await Promise.all([
         send('GET_STATS', { range: '30d' }),
         readHealth(),
         send('GET_SETTINGS', {}),
         readStorageFailure(),
       ]);
-      setDays(ranged);
+      const since = localDateKey(startOfLocalDayBefore(Date.now(), { today: 0, '7d': 6, '30d': 29 }[range]));
+      setDays(month.filter(day => day.date >= since));
       setHistory(month);
       setHealth(extraction);
       setTracking(settings.trackingEnabled);
@@ -276,13 +277,12 @@ export function Popup() {
     <>
       <header className="head">
         <h1 className="brand">Doomscroll</h1>
-        <div className="tabs" role="tablist" aria-label="Time range">
+        <div className="tabs" role="group" aria-label="Time range">
           {RANGE_TABS.map((tab) => (
             <button
               key={tab.value}
               className="tab"
-              role="tab"
-              aria-selected={range === tab.value}
+              aria-pressed={range === tab.value}
               onClick={() => setRange(tab.value)}
             >
               {tab.label}
